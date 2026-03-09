@@ -42,8 +42,23 @@ class MainActivity : AppCompatActivity() {
             wakeLock?.acquire(24 * 60 * 60 * 1000L)
         } catch (_: Exception) {}
 
-        mediaCacheDir = File(filesDir, "media_cache")
+        // Use external storage so files are visible in file manager
+        // Path: /sdcard/Android/data/com.airmyplay.player/files/media_cache/
+        val extDir = getExternalFilesDir(null)
+        mediaCacheDir = File(extDir ?: filesDir, "media_cache")
         if (!mediaCacheDir.exists()) mediaCacheDir.mkdirs()
+
+        // Migrate old internal cache to external (one-time)
+        val oldCacheDir = File(filesDir, "media_cache")
+        if (oldCacheDir.exists() && oldCacheDir.listFiles()?.isNotEmpty() == true) {
+            try {
+                oldCacheDir.listFiles()?.forEach { f ->
+                    val dest = File(mediaCacheDir, f.name)
+                    if (!dest.exists()) f.renameTo(dest) else f.delete()
+                }
+                oldCacheDir.delete()
+            } catch (_: Exception) {}
+        }
 
         webView = WebView(this).apply {
             settings.apply {
