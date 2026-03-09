@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -35,10 +38,12 @@ jobs:
           ./gradlew assembleRelease
 
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Airmyplay-Player.apk
+        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Airmyplay.apk
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Airmyplay-Player-TV
-          path: app/build/outputs/apk/release/Airmyplay-Player.apk
+          tag_name: latest
+          name: Airmyplay Player - Latest
+          files: app/build/outputs/apk/release/Airmyplay.apk
+          make_latest: true
