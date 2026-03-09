@@ -165,6 +165,13 @@ loginForm.addEventListener("submit", async (e) => {
   );
 });
 
+// Auto-format inputs: brand & branch → lowercase, no spaces
+inputBrand.addEventListener("input", () => {
+  inputBrand.value = inputBrand.value.toLowerCase().replace(/\s/g, "");
+});
+inputBranch.addEventListener("input", () => {
+  inputBranch.value = inputBranch.value.toLowerCase().replace(/\s/g, "");
+});
 // Auto-uppercase monitor code
 inputCode.addEventListener("input", () => {
   inputCode.value = inputCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "");

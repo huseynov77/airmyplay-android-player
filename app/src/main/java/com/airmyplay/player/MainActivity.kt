@@ -24,8 +24,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mediaCacheDir: File
 
     companion object {
-        // Fake origin for asset loading — all sub-resources go through shouldInterceptRequest
-        const val BASE_URL = "https://airmyplay.local/"
+        // Use API domain as base URL to avoid CORS issues with fetch() calls
+        const val BASE_URL = "https://backend-production-2fbb.up.railway.app/"
+        val ASSET_FILES = setOf("index.html", "style.css", "player.js", "socket.io.min.js", "logo.svg", "favicon.svg")
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -59,10 +60,12 @@ class MainActivity : AppCompatActivity() {
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                     val url = request?.url?.toString() ?: return null
 
-                    // Serve player assets from app bundle
+                    // Serve local player asset files (style.css, player.js, etc.)
                     if (url.startsWith(BASE_URL)) {
                         val path = url.removePrefix(BASE_URL)
-                        return serveAsset("player/$path")
+                        if (ASSET_FILES.contains(path)) {
+                            return serveAsset("player/$path")
+                        }
                     }
 
                     // Serve cached media files
@@ -74,6 +77,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
 
+                    // Everything else (API calls, socket.io, media URLs) goes to network
                     return null
                 }
 
