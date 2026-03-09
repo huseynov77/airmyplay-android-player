@@ -201,6 +201,12 @@ async function doLogin(brand, branch, code, reconnect = false) {
     saveState();
     enterPlayer();
   } catch (err) {
+    // If reconnecting offline with cached data, enter player silently
+    if (reconnect && schedules.length > 0) {
+      devLog("Reconnect failed, entering offline mode");
+      enterPlayer();
+      return;
+    }
     loginError.textContent = err.message || "Giriş uğursuz oldu";
     loginError.classList.remove("hidden");
   } finally {
@@ -665,12 +671,6 @@ async function sendHeartbeat() {
       nowPlaying: playlist[currentIndex]?.name || null,
     };
 
-    // Add cache stats on Android
-    if (isAndroid) {
-      const stats = getCacheStats();
-      if (stats) body.cacheStats = stats;
-    }
-
     await fetch(`${API_BASE}/device/${monitorInfo.id}/heartbeat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -904,7 +904,7 @@ function doLogout() {
   const state = loadState();
 
   if (cred && state && state.token && state.monitorInfo) {
-    // Restore state and try reconnect
+    // Restore state
     token = state.token;
     monitorInfo = state.monitorInfo;
     schedules = state.schedules || [];
@@ -913,7 +913,12 @@ function doLogout() {
     audioVolume = state.audioVolume ?? 100;
     audioMuted = state.audioMuted ?? false;
 
-    // Try reconnect login
-    doLogin(cred.brand, cred.branch, cred.code, true);
+    // Try reconnect login — if fails (offline), use cached data
+    doLogin(cred.brand, cred.branch, cred.code, true).catch(() => {
+      devLog("Login failed (offline?) — using cached data");
+      if (schedules.length > 0) {
+        enterPlayer();
+      }
+    });
   }
 })();
