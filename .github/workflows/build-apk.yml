@@ -20,13 +20,25 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
 
+      - name: Generate signing keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/release.keystore \
+            -alias airmyplay \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass airmyplay2026 -keypass airmyplay2026 \
+            -dname "CN=Airmyplay, OU=Mobile, O=Airmyplay, L=Baku, ST=Baku, C=AZ"
+
       - name: Build Release APK
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease
 
+      - name: Rename APK
+        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Airmyplay-Player.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Airmyplay-Player-TV
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/Airmyplay-Player.apk
