@@ -11,7 +11,6 @@ import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
-import androidx.webkit.WebViewAssetLoader
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -28,77 +27,46 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Fullscreen immersive — hide system bars
         enterImmersiveMode()
-
-        // Keep screen on
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // Wake lock for background
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "airmyplay:player")
         wakeLock?.acquire()
 
-        // Media cache directory
         mediaCacheDir = File(filesDir, "media_cache")
         if (!mediaCacheDir.exists()) mediaCacheDir.mkdirs()
 
-        // WebViewAssetLoader — serves assets via https:// to avoid CORS/file:// issues
-        val assetLoader = WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
-            .build()
-
-        // WebView setup
         webView = WebView(this).apply {
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                mediaPlaybackRequiresUserGesture = false  // Autoplay videos
+                mediaPlaybackRequiresUserGesture = false
                 cacheMode = WebSettings.LOAD_DEFAULT
                 databaseEnabled = true
                 allowFileAccess = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 userAgentString = "$userAgentString AirmyplayAndroid/1.0"
-
-                // Allow cross-origin requests from the asset loader domain
                 allowFileAccessFromFileURLs = true
                 allowUniversalAccessFromFileURLs = true
             }
 
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                    if (request == null) return super.shouldInterceptRequest(view, request)
+                    val url = request?.url?.toString() ?: return null
 
-                    val url = request.url.toString()
-
-                    // Intercept cached media files (file:// paths returned by bridge)
-                    if (url.startsWith("file:///")) {
-                        try {
-                            val path = url.removePrefix("file://")
-                            val file = File(path)
-                            if (file.exists()) {
-                                val mimeType = when {
-                                    path.endsWith(".mp4") -> "video/mp4"
-                                    path.endsWith(".webm") -> "video/webm"
-                                    path.endsWith(".ogg") -> "video/ogg"
-                                    path.endsWith(".mov") -> "video/quicktime"
-                                    path.endsWith(".jpg") || path.endsWith(".jpeg") -> "image/jpeg"
-                                    path.endsWith(".png") -> "image/png"
-                                    path.endsWith(".gif") -> "image/gif"
-                                    path.endsWith(".webp") -> "image/webp"
-                                    path.endsWith(".svg") -> "image/svg+xml"
-                                    else -> "application/octet-stream"
-                                }
-                                return WebResourceResponse(mimeType, null, file.inputStream())
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("Airmyplay", "File intercept error: ${e.message}")
-                        }
+                    // Serve local player assets from https://player.local/
+                    if (url.startsWith("https://player.local/")) {
+                        val assetPath = "player/" + url.removePrefix("https://player.local/")
+                        return serveAsset(assetPath)
                     }
 
-                    // Let AssetLoader handle asset URLs
-                    return assetLoader.shouldInterceptRequest(request.url)
-                        ?: super.shouldInterceptRequest(view, request)
+                    // Serve cached media files via file:// paths
+                    if (url.startsWith("file:///")) {
+                        return serveCachedFile(url.removePrefix("file://"))
+                    }
+
+                    return null
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -109,7 +77,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    // Keep all navigation within the WebView
                     return false
                 }
             }
@@ -127,17 +94,67 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Add JavaScript bridge for media caching
             addJavascriptInterface(AndroidBridge(), "AndroidBridge")
-
-            // Hardware acceleration
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
         }
 
         setContentView(webView)
 
-        // Load from WebViewAssetLoader (serves as https://appassets.androidplatform.net/assets/...)
-        webView.loadUrl("https://appassets.androidplatform.net/assets/player/index.html")
+        // Load via fake https:// domain — intercepted by shouldInterceptRequest
+        webView.loadUrl("https://player.local/index.html")
+    }
+
+    // ============================================================
+    // Asset & Cache serving
+    // ============================================================
+    private fun serveAsset(assetPath: String): WebResourceResponse? {
+        return try {
+            val inputStream = assets.open(assetPath)
+            val mimeType = getMimeType(assetPath)
+            val response = WebResourceResponse(mimeType, "UTF-8", inputStream)
+            response.responseHeaders = mapOf(
+                "Access-Control-Allow-Origin" to "*",
+                "Cache-Control" to "no-cache"
+            )
+            response
+        } catch (e: Exception) {
+            android.util.Log.e("Airmyplay", "Asset not found: $assetPath")
+            null
+        }
+    }
+
+    private fun serveCachedFile(path: String): WebResourceResponse? {
+        return try {
+            val file = File(path)
+            if (file.exists()) {
+                val mimeType = getMimeType(path)
+                val response = WebResourceResponse(mimeType, null, file.inputStream())
+                response.responseHeaders = mapOf("Access-Control-Allow-Origin" to "*")
+                response
+            } else null
+        } catch (e: Exception) {
+            android.util.Log.e("Airmyplay", "Cache file error: ${e.message}")
+            null
+        }
+    }
+
+    private fun getMimeType(path: String): String {
+        return when {
+            path.endsWith(".html") -> "text/html"
+            path.endsWith(".css") -> "text/css"
+            path.endsWith(".js") -> "application/javascript"
+            path.endsWith(".svg") -> "image/svg+xml"
+            path.endsWith(".png") -> "image/png"
+            path.endsWith(".jpg") || path.endsWith(".jpeg") -> "image/jpeg"
+            path.endsWith(".gif") -> "image/gif"
+            path.endsWith(".webp") -> "image/webp"
+            path.endsWith(".mp4") -> "video/mp4"
+            path.endsWith(".webm") -> "video/webm"
+            path.endsWith(".ogg") -> "video/ogg"
+            path.endsWith(".mov") -> "video/quicktime"
+            path.endsWith(".json") -> "application/json"
+            else -> "application/octet-stream"
+        }
     }
 
     // ============================================================
@@ -165,12 +182,10 @@ class MainActivity : AppCompatActivity() {
                 val fileName = md5(url) + getExtension(url)
                 val file = File(mediaCacheDir, fileName)
 
-                // Already cached
                 if (file.exists() && file.length() > 0) {
                     return file.absolutePath
                 }
 
-                // Download
                 val tmpFile = File(mediaCacheDir, "$fileName.tmp")
                 val connection = URL(url).openConnection() as HttpURLConnection
                 connection.connectTimeout = 30000
@@ -195,76 +210,61 @@ class MainActivity : AppCompatActivity() {
 
                 connection.disconnect()
 
-                // Rename tmp to final
                 if (tmpFile.exists() && tmpFile.length() > 0) {
                     tmpFile.renameTo(file)
                     android.util.Log.d("AirmyplayCache", "Cached: $fileName (${file.length() / 1024}KB)")
                     return file.absolutePath
                 }
-
             } catch (e: Exception) {
-                android.util.Log.e("AirmyplayCache", "Download error for $url: ${e.message}")
+                android.util.Log.e("AirmyplayCache", "Download error: ${e.message}")
             }
             return ""
         }
 
         @JavascriptInterface
         fun getCacheStats(): String {
-            try {
+            return try {
                 val files = mediaCacheDir.listFiles() ?: return "{}"
                 val count = files.count { !it.name.endsWith(".tmp") }
                 val totalSize = files.filter { !it.name.endsWith(".tmp") }.sumOf { it.length() }
-                return """{"files":$count,"totalSizeMB":${totalSize / 1024 / 1024}}"""
-            } catch (e: Exception) {
-                return "{}"
-            }
+                """{"files":$count,"totalSizeMB":${totalSize / 1024 / 1024}}"""
+            } catch (e: Exception) { "{}" }
         }
 
         @JavascriptInterface
         fun clearCache(): Boolean {
-            try {
-                val files = mediaCacheDir.listFiles() ?: return true
-                files.forEach { it.delete() }
-                android.util.Log.d("AirmyplayCache", "Cache cleared")
-                return true
-            } catch (e: Exception) {
-                return false
-            }
+            return try {
+                mediaCacheDir.listFiles()?.forEach { it.delete() }
+                true
+            } catch (e: Exception) { false }
         }
 
         @JavascriptInterface
         fun getAppVersion(): String {
             return try {
-                val pInfo = packageManager.getPackageInfo(packageName, 0)
-                pInfo.versionName ?: "1.0.0"
-            } catch (e: Exception) {
-                "1.0.0"
-            }
+                packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+            } catch (e: Exception) { "1.0.0" }
         }
 
         private fun md5(input: String): String {
-            val md = MessageDigest.getInstance("MD5")
-            val digest = md.digest(input.toByteArray())
+            val digest = MessageDigest.getInstance("MD5").digest(input.toByteArray())
             return digest.joinToString("") { "%02x".format(it) }
         }
 
         private fun getExtension(url: String): String {
-            try {
+            return try {
                 val path = URL(url).path
                 val lastDot = path.lastIndexOf(".")
                 if (lastDot > 0) {
                     val ext = path.substring(lastDot).lowercase()
-                    if (ext in listOf(".mp4", ".webm", ".ogg", ".mov", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg")) {
-                        return ext
-                    }
-                }
-            } catch (_: Exception) {}
-            return ""
+                    if (ext in listOf(".mp4", ".webm", ".ogg", ".mov", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg")) ext else ""
+                } else ""
+            } catch (_: Exception) { "" }
         }
     }
 
     // ============================================================
-    // Immersive Mode
+    // Immersive Mode & Key Handling
     // ============================================================
     private fun enterImmersiveMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -288,8 +288,7 @@ class MainActivity : AppCompatActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> return true
-            KeyEvent.KEYCODE_DPAD_CENTER,
-            KeyEvent.KEYCODE_ENTER -> {
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                 webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))", null)
                 return true
             }
@@ -301,8 +300,7 @@ class MainActivity : AppCompatActivity() {
                 webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'}))", null)
                 return true
             }
-            KeyEvent.KEYCODE_VOLUME_UP,
-            KeyEvent.KEYCODE_VOLUME_DOWN -> return super.onKeyDown(keyCode, event)
+            KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> return super.onKeyDown(keyCode, event)
         }
         return super.onKeyDown(keyCode, event)
     }
@@ -312,20 +310,7 @@ class MainActivity : AppCompatActivity() {
         if (hasFocus) enterImmersiveMode()
     }
 
-    override fun onResume() {
-        super.onResume()
-        webView.onResume()
-        enterImmersiveMode()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        webView.onPause()
-    }
-
-    override fun onDestroy() {
-        wakeLock?.release()
-        webView.destroy()
-        super.onDestroy()
-    }
+    override fun onResume() { super.onResume(); webView.onResume(); enterImmersiveMode() }
+    override fun onPause() { super.onPause(); webView.onPause() }
+    override fun onDestroy() { wakeLock?.release(); webView.destroy(); super.onDestroy() }
 }
