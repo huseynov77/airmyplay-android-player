@@ -15,8 +15,18 @@ android {
         versionName "1.0.0"
     }
 
+    signingConfigs {
+        release {
+            storeFile file("release.keystore")
+            storePassword "airmyplay2026"
+            keyAlias "airmyplay"
+            keyPassword "airmyplay2026"
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
         }
