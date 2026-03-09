@@ -66,34 +66,24 @@ let nextVideo = videoB;
 // ============================================================
 function getCachedUrl(url) {
   if (!isAndroid || !url) return url;
-  // Check if already cached
   const cached = AndroidBridge.getCachedPath(url);
-  if (cached && cached !== "") {
-    return "file://" + cached;
-  }
+  if (cached && cached !== "") return cached;
   return url;
 }
 
 async function cacheMediaFile(url) {
   if (!isAndroid || !url) return url;
 
-  // Check if already cached
   const cached = AndroidBridge.getCachedPath(url);
-  if (cached && cached !== "") {
-    return "file://" + cached;
-  }
+  if (cached && cached !== "") return cached;
 
-  // Start download in background
   try {
     const localPath = AndroidBridge.downloadMedia(url);
-    if (localPath && localPath !== "") {
-      return "file://" + localPath;
-    }
+    if (localPath && localPath !== "") return localPath;
   } catch (e) {
     console.warn("[Cache] Download failed:", url, e);
   }
 
-  // Fallback to remote URL
   return url;
 }
 

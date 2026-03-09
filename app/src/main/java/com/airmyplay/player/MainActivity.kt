@@ -23,6 +23,11 @@ class MainActivity : AppCompatActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var mediaCacheDir: File
 
+    companion object {
+        // Fake origin for asset loading — all sub-resources go through shouldInterceptRequest
+        const val BASE_URL = "https://airmyplay.local/"
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         try {
             val pm = getSystemService(POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "airmyplay:player")
-            wakeLock?.acquire(24 * 60 * 60 * 1000L) // 24 hours
+            wakeLock?.acquire(24 * 60 * 60 * 1000L)
         } catch (_: Exception) {}
 
         mediaCacheDir = File(filesDir, "media_cache")
@@ -46,31 +51,26 @@ class MainActivity : AppCompatActivity() {
                 mediaPlaybackRequiresUserGesture = false
                 cacheMode = WebSettings.LOAD_DEFAULT
                 databaseEnabled = true
-                allowFileAccess = true
-                allowContentAccess = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 userAgentString = "$userAgentString AirmyplayAndroid/1.0"
-
-                @Suppress("DEPRECATION")
-                allowFileAccessFromFileURLs = true
-                @Suppress("DEPRECATION")
-                allowUniversalAccessFromFileURLs = true
             }
 
             webViewClient = object : WebViewClient() {
-                // Intercept cached media file:// requests
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                     val url = request?.url?.toString() ?: return null
 
-                    if (url.startsWith("file:///data/")) {
-                        try {
-                            val path = url.removePrefix("file://")
-                            val file = File(path)
-                            if (file.exists()) {
-                                return WebResourceResponse(getMimeType(path), null, file.inputStream())
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("Airmyplay", "Cache file error: ${e.message}")
+                    // Serve player assets from app bundle
+                    if (url.startsWith(BASE_URL)) {
+                        val path = url.removePrefix(BASE_URL)
+                        return serveAsset("player/$path")
+                    }
+
+                    // Serve cached media files
+                    if (url.startsWith("https://airmyplay-cache.local/")) {
+                        val path = url.removePrefix("https://airmyplay-cache.local/")
+                        val file = File(mediaCacheDir, path)
+                        if (file.exists()) {
+                            return WebResourceResponse(getMimeType(path), null, file.inputStream())
                         }
                     }
 
@@ -78,16 +78,12 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    android.util.Log.e("Airmyplay", "Error: ${error?.description} for ${request?.url}")
+                    android.util.Log.e("Airmyplay", "WebView error: ${error?.description} URL: ${request?.url}")
                 }
 
-                // CRITICAL: Never open external browser
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val url = request?.url?.toString() ?: return false
-                    android.util.Log.d("Airmyplay", "Navigation: $url")
-                    // Load everything inside WebView
-                    view?.loadUrl(url)
-                    return true
+                    // Never open external browser
+                    return false
                 }
             }
 
@@ -106,8 +102,25 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(webView)
 
-        // Simple direct load from assets
-        webView.loadUrl("file:///android_asset/player/index.html")
+        // Load HTML content directly — sub-resources fetched via shouldInterceptRequest
+        try {
+            val html = assets.open("player/index.html").bufferedReader().readText()
+            webView.loadDataWithBaseURL(BASE_URL, html, "text/html", "UTF-8", null)
+        } catch (e: Exception) {
+            android.util.Log.e("Airmyplay", "Failed to load HTML: ${e.message}")
+            webView.loadData("<h1>Error loading player</h1><p>${e.message}</p>", "text/html", "UTF-8")
+        }
+    }
+
+    private fun serveAsset(assetPath: String): WebResourceResponse? {
+        return try {
+            val inputStream = assets.open(assetPath)
+            val mimeType = getMimeType(assetPath)
+            WebResourceResponse(mimeType, "UTF-8", inputStream)
+        } catch (e: Exception) {
+            android.util.Log.e("Airmyplay", "Asset not found: $assetPath")
+            null
+        }
     }
 
     private fun getMimeType(path: String): String {
@@ -124,6 +137,7 @@ class MainActivity : AppCompatActivity() {
             path.endsWith(".webm") -> "video/webm"
             path.endsWith(".ogg") -> "video/ogg"
             path.endsWith(".mov") -> "video/quicktime"
+            path.endsWith(".json") -> "application/json"
             else -> "application/octet-stream"
         }
     }
@@ -138,8 +152,11 @@ class MainActivity : AppCompatActivity() {
             try {
                 val fileName = md5(url) + getExtension(url)
                 val file = File(mediaCacheDir, fileName)
-                if (file.exists() && file.length() > 0) return file.absolutePath
-            } catch (e: Exception) {}
+                if (file.exists() && file.length() > 0) {
+                    // Return as interceptable URL, not file:// path
+                    return "https://airmyplay-cache.local/$fileName"
+                }
+            } catch (_: Exception) {}
             return ""
         }
 
@@ -148,7 +165,9 @@ class MainActivity : AppCompatActivity() {
             try {
                 val fileName = md5(url) + getExtension(url)
                 val file = File(mediaCacheDir, fileName)
-                if (file.exists() && file.length() > 0) return file.absolutePath
+                if (file.exists() && file.length() > 0) {
+                    return "https://airmyplay-cache.local/$fileName"
+                }
 
                 val tmpFile = File(mediaCacheDir, "$fileName.tmp")
                 val conn = URL(url).openConnection() as HttpURLConnection
@@ -168,7 +187,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (tmpFile.exists() && tmpFile.length() > 0) {
                     tmpFile.renameTo(file)
-                    return file.absolutePath
+                    return "https://airmyplay-cache.local/$fileName"
                 }
             } catch (e: Exception) {
                 android.util.Log.e("AirmyplayCache", "Download: ${e.message}")
@@ -181,17 +200,17 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val files = mediaCacheDir.listFiles()?.filter { !it.name.endsWith(".tmp") } ?: emptyList()
                 """{"files":${files.size},"totalSizeMB":${files.sumOf { it.length() } / 1024 / 1024}}"""
-            } catch (e: Exception) { "{}" }
+            } catch (_: Exception) { "{}" }
         }
 
         @JavascriptInterface
         fun clearCache(): Boolean {
-            return try { mediaCacheDir.listFiles()?.forEach { it.delete() }; true } catch (e: Exception) { false }
+            return try { mediaCacheDir.listFiles()?.forEach { it.delete() }; true } catch (_: Exception) { false }
         }
 
         @JavascriptInterface
         fun getAppVersion(): String {
-            return try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.0" } catch (e: Exception) { "1.1.0" }
+            return try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0" } catch (_: Exception) { "1.2.0" }
         }
 
         private fun md5(input: String): String {
@@ -200,15 +219,14 @@ class MainActivity : AppCompatActivity() {
 
         private fun getExtension(url: String): String {
             return try {
-                val path = URL(url).path
-                val ext = path.substringAfterLast(".", "").lowercase()
+                val ext = URL(url).path.substringAfterLast(".", "").lowercase()
                 if (ext in listOf("mp4", "webm", "ogg", "mov", "jpg", "jpeg", "png", "gif", "webp", "svg")) ".$ext" else ""
             } catch (_: Exception) { "" }
         }
     }
 
     // ============================================================
-    // Immersive Mode & Keys
+    // Immersive & Keys
     // ============================================================
     private fun enterImmersiveMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -251,11 +269,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) enterImmersiveMode()
+        if (hasFocus) try { enterImmersiveMode() } catch (_: Exception) {}
     }
 
-    override fun onResume() { super.onResume(); webView.onResume(); enterImmersiveMode() }
-    override fun onPause() { super.onPause(); webView.onPause() }
+    override fun onResume() {
+        super.onResume()
+        try { webView.onResume() } catch (_: Exception) {}
+        try { enterImmersiveMode() } catch (_: Exception) {}
+    }
+
+    override fun onPause() {
+        super.onPause()
+        try { webView.onPause() } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
         try { wakeLock?.release() } catch (_: Exception) {}
         try { webView.destroy() } catch (_: Exception) {}
