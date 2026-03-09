@@ -29,7 +29,6 @@ let clockInterval = null;
 let hudTimeout = null;
 let mediaCache = {}; // url -> localPath mapping
 let devToolsOpen = false;
-let longPressTimer = null;
 let devLogs = [];
 
 // ---- DOM ----
@@ -201,8 +200,8 @@ async function doLogin(brand, branch, code, reconnect = false) {
     saveState();
     enterPlayer();
   } catch (err) {
-    // If reconnecting offline with cached data, enter player silently
-    if (reconnect && schedules.length > 0) {
+    // If reconnecting offline, enter player silently (screensaver if no schedules)
+    if (reconnect) {
       devLog("Reconnect failed, entering offline mode");
       enterPlayer();
       return;
@@ -750,7 +749,16 @@ function createDevTools() {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button id="dev-clear-cache" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Keşi Təmizlə</button>
       <button id="dev-reload-playlist" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Playlist Yenilə</button>
+      <button id="dev-show-files" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Keş Faylları</button>
       <button id="dev-logout" style="background:#ef4444;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Çıxış</button>
+    </div>
+
+    <div id="dev-files-section" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="color:#6b7280;font-size:10px">Keş Qovluğu</div>
+        <div id="dev-cache-path" style="color:#6b7280;font-size:9px;font-family:monospace"></div>
+      </div>
+      <div id="dev-file-list" style="background:#0a0a14;padding:10px;border-radius:8px;overflow-y:auto;max-height:200px;font-size:11px"></div>
     </div>
 
     <div style="flex:1;min-height:0">
@@ -768,6 +776,15 @@ function createDevTools() {
     updateDevStats();
   };
   document.getElementById("dev-reload-playlist").onclick = () => { loadPlaylist(); devLog("Playlist reload triggered"); };
+  document.getElementById("dev-show-files").onclick = () => {
+    const section = document.getElementById("dev-files-section");
+    if (section.style.display === "none") {
+      section.style.display = "block";
+      showCacheFiles();
+    } else {
+      section.style.display = "none";
+    }
+  };
   document.getElementById("dev-logout").onclick = () => { panel.remove(); devToolsOpen = false; doLogout(); };
 
   devToolsOpen = true;
@@ -806,25 +823,55 @@ function updateDevStats() {
   }
 }
 
-// Long press handler — 5 seconds to open dev tools
-document.addEventListener("touchstart", (e) => {
+function showCacheFiles() {
+  const listEl = document.getElementById("dev-file-list");
+  const pathEl = document.getElementById("dev-cache-path");
+  if (!isAndroid) {
+    listEl.innerHTML = '<div style="color:#6b7280">Yalnız Android-də mövcuddur</div>';
+    return;
+  }
+  try {
+    pathEl.textContent = AndroidBridge.getCachePath();
+    const files = JSON.parse(AndroidBridge.listCacheFiles());
+    if (files.length === 0) {
+      listEl.innerHTML = '<div style="color:#6b7280">Keşdə fayl yoxdur</div>';
+      return;
+    }
+    listEl.innerHTML = files.map((f, i) => {
+      const extColor = f.ext.match(/mp4|webm|mov|ogg/) ? "#3b82f6" : "#10b981";
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1a2e">
+        <span style="color:#d1d5db;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${i+1}. ${f.name}</span>
+        <span style="display:flex;gap:8px;flex-shrink:0">
+          <span style="color:${extColor};text-transform:uppercase;font-size:10px">${f.ext}</span>
+          <span style="color:#6b7280">${f.size}</span>
+        </span>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    listEl.innerHTML = `<div style="color:#ef4444">Xəta: ${e.message}</div>`;
+  }
+}
+
+// Triple-tap to open dev tools (3 taps within 1.5s)
+let tapCount = 0;
+let tapTimer = null;
+
+function handleDevTap() {
   if (devToolsOpen) return;
-  longPressTimer = setTimeout(() => {
+  tapCount++;
+  if (tapCount === 1) {
+    tapTimer = setTimeout(() => { tapCount = 0; }, 1500);
+  }
+  if (tapCount >= 3) {
+    clearTimeout(tapTimer);
+    tapCount = 0;
     createDevTools();
-  }, 5000);
-}, { passive: true });
+  }
+}
 
-document.addEventListener("touchend", () => { clearTimeout(longPressTimer); }, { passive: true });
-document.addEventListener("touchmove", () => { clearTimeout(longPressTimer); }, { passive: true });
-
+document.addEventListener("touchend", (e) => { handleDevTap(); }, { passive: true });
 // Also support mouse (for testing on desktop)
-document.addEventListener("mousedown", (e) => {
-  if (devToolsOpen) return;
-  longPressTimer = setTimeout(() => {
-    createDevTools();
-  }, 5000);
-});
-document.addEventListener("mouseup", () => { clearTimeout(longPressTimer); });
+document.addEventListener("dblclick", () => { createDevTools(); });
 
 // Update dev stats every 5s if open
 setInterval(() => { if (devToolsOpen) updateDevStats(); }, 5000);
@@ -916,9 +963,8 @@ function doLogout() {
     // Try reconnect login — if fails (offline), use cached data
     doLogin(cred.brand, cred.branch, cred.code, true).catch(() => {
       devLog("Login failed (offline?) — using cached data");
-      if (schedules.length > 0) {
-        enterPlayer();
-      }
+      // Enter player even without schedules — will show screensaver
+      enterPlayer();
     });
   }
 })();

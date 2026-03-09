@@ -213,6 +213,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun listCacheFiles(): String {
+            return try {
+                val files = mediaCacheDir.listFiles()?.filter { !it.name.endsWith(".tmp") } ?: emptyList()
+                val list = files.sortedByDescending { it.lastModified() }.map { f ->
+                    val sizeMB = String.format("%.2f", f.length().toDouble() / 1024 / 1024)
+                    val ext = f.name.substringAfterLast(".", "?")
+                    """{"name":"${f.name}","size":"${sizeMB} MB","ext":"$ext"}"""
+                }
+                "[${list.joinToString(",")}]"
+            } catch (_: Exception) { "[]" }
+        }
+
+        @JavascriptInterface
+        fun getCachePath(): String {
+            return mediaCacheDir.absolutePath
+        }
+
+        @JavascriptInterface
         fun getAppVersion(): String {
             return try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0" } catch (_: Exception) { "1.2.0" }
         }
