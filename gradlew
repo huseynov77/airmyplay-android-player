@@ -44,7 +44,7 @@ APP_BASE_NAME=${0##*/}
 APP_HOME=$( cd "${APP_HOME:-./}" > /dev/null && pwd -P ) || exit
 
 # Add default JVM options here.
-DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+DEFAULT_JVM_OPTS='-Xmx64m -Xms64m'
 
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum
@@ -126,14 +126,6 @@ if "$cygwin" || "$msys" ; then
     JAVACMD=$( cygpath --unix "$JAVACMD" )
 
 fi
-
-# Collect all arguments for the java command
-eval "set -- $(
-        printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
-        xargs -n1 |
-        sed ' s~[^-[:alnum:]+,./:=@]~\\&~g; ' |
-        tr '\n' ' '
-    )" '"$@"'
 
 exec "$JAVACMD" \
     $DEFAULT_JVM_OPTS \
