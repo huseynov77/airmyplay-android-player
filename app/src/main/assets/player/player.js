@@ -236,34 +236,45 @@ function enterPlayer() {
 function connectSocket() {
   if (socket) socket.disconnect();
 
-  socket = io(WS_BASE, {
-    path: "/socket.io",
+  socket = io(`${WS_BASE}/device`, {
     transports: ["websocket", "polling"],
     auth: { token },
-    query: { namespace: "device" },
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 30000,
   });
-
-  // Try /device namespace
-  if (socket.nsp !== "/device") {
-    socket.disconnect();
-    socket = io(`${WS_BASE}/device`, {
-      transports: ["websocket", "polling"],
-      auth: { token },
-    });
-  }
 
   socket.on("connect", () => {
     devLog("[WS] Connected");
     socket.emit("register", { monitorId: monitorInfo.id, token });
   });
 
-  socket.on("disconnect", () => {
-    devLog("[WS] Disconnected");
+  socket.on("disconnect", (reason) => {
+    devLog(`[WS] Disconnected: ${reason}`);
+  });
+
+  socket.on("connect_error", (err) => {
+    devLog(`[WS] Connection error: ${err.message}`);
+  });
+
+  socket.on("reconnect", () => {
+    devLog("[WS] Reconnected — reloading playlist");
+    socket.emit("register", { monitorId: monitorInfo.id, token });
+    loadPlaylist();
   });
 
   socket.on("playlist_update", () => {
-    console.log("[WS] playlist_update");
+    devLog("[WS] playlist_update received");
     loadPlaylist();
+  });
+
+  socket.on("sync_playback", (data) => {
+    devLog("[WS] sync_playback received");
+    currentIndex = data?.startIndex || 0;
+    if (playlist.length > 0) {
+      preloadAndPlay();
+    }
   });
 
   socket.on("audio_update", (data) => {
