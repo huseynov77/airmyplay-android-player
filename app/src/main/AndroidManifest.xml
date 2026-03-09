@@ -14,7 +14,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="Airmyplay Player"
+        android:label="Airmyplay"
         android:theme="@style/AppTheme"
         android:banner="@drawable/banner"
         android:supportsRtl="true">
