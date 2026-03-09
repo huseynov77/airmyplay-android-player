@@ -11,6 +11,7 @@ import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.WebViewAssetLoader
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -21,7 +22,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private var wakeLock: PowerManager.WakeLock? = null
-    private lateinit var cacheDir2: File
+    private lateinit var mediaCacheDir: File
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,8 +40,13 @@ class MainActivity : AppCompatActivity() {
         wakeLock?.acquire()
 
         // Media cache directory
-        cacheDir2 = File(filesDir, "media_cache")
-        if (!cacheDir2.exists()) cacheDir2.mkdirs()
+        mediaCacheDir = File(filesDir, "media_cache")
+        if (!mediaCacheDir.exists()) mediaCacheDir.mkdirs()
+
+        // WebViewAssetLoader — serves assets via https:// to avoid CORS/file:// issues
+        val assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
 
         // WebView setup
         webView = WebView(this).apply {
@@ -54,15 +60,50 @@ class MainActivity : AppCompatActivity() {
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 userAgentString = "$userAgentString AirmyplayAndroid/1.0"
 
-                // Allow file:// access for cached media
+                // Allow cross-origin requests from the asset loader domain
                 allowFileAccessFromFileURLs = true
                 allowUniversalAccessFromFileURLs = true
             }
 
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                    if (request == null) return super.shouldInterceptRequest(view, request)
+
+                    val url = request.url.toString()
+
+                    // Intercept cached media files (file:// paths returned by bridge)
+                    if (url.startsWith("file:///")) {
+                        try {
+                            val path = url.removePrefix("file://")
+                            val file = File(path)
+                            if (file.exists()) {
+                                val mimeType = when {
+                                    path.endsWith(".mp4") -> "video/mp4"
+                                    path.endsWith(".webm") -> "video/webm"
+                                    path.endsWith(".ogg") -> "video/ogg"
+                                    path.endsWith(".mov") -> "video/quicktime"
+                                    path.endsWith(".jpg") || path.endsWith(".jpeg") -> "image/jpeg"
+                                    path.endsWith(".png") -> "image/png"
+                                    path.endsWith(".gif") -> "image/gif"
+                                    path.endsWith(".webp") -> "image/webp"
+                                    path.endsWith(".svg") -> "image/svg+xml"
+                                    else -> "application/octet-stream"
+                                }
+                                return WebResourceResponse(mimeType, null, file.inputStream())
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("Airmyplay", "File intercept error: ${e.message}")
+                        }
+                    }
+
+                    // Let AssetLoader handle asset URLs
+                    return assetLoader.shouldInterceptRequest(request.url)
+                        ?: super.shouldInterceptRequest(view, request)
+                }
+
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    // On network error for the main page, try reload after 5 seconds
                     if (request?.isForMainFrame == true) {
+                        android.util.Log.e("Airmyplay", "Main frame error: ${error?.description}")
                         view?.postDelayed({ view.reload() }, 5000)
                     }
                 }
@@ -78,7 +119,6 @@ class MainActivity : AppCompatActivity() {
                     super.onShowCustomView(view, callback)
                 }
 
-                // Allow console.log to show in logcat
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                     consoleMessage?.let {
                         android.util.Log.d("AirmyplayJS", "${it.message()} [${it.sourceId()}:${it.lineNumber()}]")
@@ -96,8 +136,8 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(webView)
 
-        // Load from local assets
-        webView.loadUrl("file:///android_asset/player/index.html")
+        // Load from WebViewAssetLoader (serves as https://appassets.androidplatform.net/assets/...)
+        webView.loadUrl("https://appassets.androidplatform.net/assets/player/index.html")
     }
 
     // ============================================================
@@ -105,15 +145,11 @@ class MainActivity : AppCompatActivity() {
     // ============================================================
     inner class AndroidBridge {
 
-        /**
-         * Check if a URL is cached and return the local file path.
-         * Returns empty string if not cached.
-         */
         @JavascriptInterface
         fun getCachedPath(url: String): String {
             try {
                 val fileName = md5(url) + getExtension(url)
-                val file = File(cacheDir2, fileName)
+                val file = File(mediaCacheDir, fileName)
                 if (file.exists() && file.length() > 0) {
                     return file.absolutePath
                 }
@@ -123,16 +159,11 @@ class MainActivity : AppCompatActivity() {
             return ""
         }
 
-        /**
-         * Download a media file to local cache.
-         * Returns local file path on success, empty string on failure.
-         * This runs on the JS thread — WebView handles threading.
-         */
         @JavascriptInterface
         fun downloadMedia(url: String): String {
             try {
                 val fileName = md5(url) + getExtension(url)
-                val file = File(cacheDir2, fileName)
+                val file = File(mediaCacheDir, fileName)
 
                 // Already cached
                 if (file.exists() && file.length() > 0) {
@@ -140,10 +171,11 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // Download
-                val tmpFile = File(cacheDir2, "$fileName.tmp")
+                val tmpFile = File(mediaCacheDir, "$fileName.tmp")
                 val connection = URL(url).openConnection() as HttpURLConnection
                 connection.connectTimeout = 30000
                 connection.readTimeout = 60000
+                connection.instanceFollowRedirects = true
                 connection.connect()
 
                 if (connection.responseCode != 200) {
@@ -176,13 +208,10 @@ class MainActivity : AppCompatActivity() {
             return ""
         }
 
-        /**
-         * Get cache statistics as JSON string.
-         */
         @JavascriptInterface
         fun getCacheStats(): String {
             try {
-                val files = cacheDir2.listFiles() ?: return "{}"
+                val files = mediaCacheDir.listFiles() ?: return "{}"
                 val count = files.count { !it.name.endsWith(".tmp") }
                 val totalSize = files.filter { !it.name.endsWith(".tmp") }.sumOf { it.length() }
                 return """{"files":$count,"totalSizeMB":${totalSize / 1024 / 1024}}"""
@@ -191,25 +220,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        /**
-         * Clear all cached media files.
-         */
         @JavascriptInterface
         fun clearCache(): Boolean {
             try {
-                val files = cacheDir2.listFiles() ?: return true
+                val files = mediaCacheDir.listFiles() ?: return true
                 files.forEach { it.delete() }
                 android.util.Log.d("AirmyplayCache", "Cache cleared")
                 return true
             } catch (e: Exception) {
-                android.util.Log.e("AirmyplayCache", "Clear cache error: ${e.message}")
                 return false
             }
         }
 
-        /**
-         * Get app version.
-         */
         @JavascriptInterface
         fun getAppVersion(): String {
             return try {
@@ -219,8 +241,6 @@ class MainActivity : AppCompatActivity() {
                 "1.0.0"
             }
         }
-
-        // ---- Helpers ----
 
         private fun md5(input: String): String {
             val md = MessageDigest.getInstance("MD5")
@@ -234,7 +254,6 @@ class MainActivity : AppCompatActivity() {
                 val lastDot = path.lastIndexOf(".")
                 if (lastDot > 0) {
                     val ext = path.substring(lastDot).lowercase()
-                    // Only keep known media extensions
                     if (ext in listOf(".mp4", ".webm", ".ogg", ".mov", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg")) {
                         return ext
                     }
@@ -266,13 +285,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Handle TV remote keys
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
-            // Back button — don't exit, stay in app
             KeyEvent.KEYCODE_BACK -> return true
-
-            // D-pad keys — forward to WebView as keyboard events
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER -> {
                 webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))", null)
@@ -286,8 +301,6 @@ class MainActivity : AppCompatActivity() {
                 webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'}))", null)
                 return true
             }
-
-            // Volume — let system handle
             KeyEvent.KEYCODE_VOLUME_UP,
             KeyEvent.KEYCODE_VOLUME_DOWN -> return super.onKeyDown(keyCode, event)
         }
