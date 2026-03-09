@@ -100,8 +100,9 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(webView)
 
-        // Load via fake https:// domain — intercepted by shouldInterceptRequest
-        webView.loadUrl("https://player.local/index.html")
+        // Load HTML directly from assets — no network/DNS needed
+        val html = assets.open("player/index.html").bufferedReader().readText()
+        webView.loadDataWithBaseURL("https://player.local/", html, "text/html", "UTF-8", null)
     }
 
     // ============================================================
