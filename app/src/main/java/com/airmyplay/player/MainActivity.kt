@@ -27,12 +27,14 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        enterImmersiveMode()
+        try { enterImmersiveMode() } catch (_: Exception) {}
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "airmyplay:player")
-        wakeLock?.acquire()
+        try {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "airmyplay:player")
+            wakeLock?.acquire(24 * 60 * 60 * 1000L) // 24 hours
+        } catch (_: Exception) {}
 
         mediaCacheDir = File(filesDir, "media_cache")
         if (!mediaCacheDir.exists()) mediaCacheDir.mkdirs()
@@ -254,5 +256,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() { super.onResume(); webView.onResume(); enterImmersiveMode() }
     override fun onPause() { super.onPause(); webView.onPause() }
-    override fun onDestroy() { wakeLock?.release(); webView.destroy(); super.onDestroy() }
+    override fun onDestroy() {
+        try { wakeLock?.release() } catch (_: Exception) {}
+        try { webView.destroy() } catch (_: Exception) {}
+        super.onDestroy()
+    }
 }
