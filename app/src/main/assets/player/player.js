@@ -28,6 +28,9 @@ let schedulePollInterval = null;
 let clockInterval = null;
 let hudTimeout = null;
 let mediaCache = {}; // url -> localPath mapping
+let devToolsOpen = false;
+let longPressTimer = null;
+let devLogs = [];
 
 // ---- DOM ----
 const $ = (id) => document.getElementById(id);
@@ -50,10 +53,6 @@ const ssClock       = $("ss-clock");
 const displayOff    = $("display-off");
 const loadingOverlay= $("loading-overlay");
 const loadingDetail = $("loading-detail");
-const hud           = $("hud");
-const hudStatus     = $("hud-status");
-const hudMonitor    = $("hud-monitor");
-const hudNowPlaying = $("hud-now-playing");
 const deactivatedOverlay = $("deactivated-overlay");
 const deactivatedMsg     = $("deactivated-msg");
 
@@ -249,14 +248,12 @@ function connectSocket() {
   }
 
   socket.on("connect", () => {
-    console.log("[WS] Connected");
+    devLog("[WS] Connected");
     socket.emit("register", { monitorId: monitorInfo.id, token });
-    updateHud(true);
   });
 
   socket.on("disconnect", () => {
-    console.log("[WS] Disconnected");
-    updateHud(false);
+    devLog("[WS] Disconnected");
   });
 
   socket.on("playlist_update", () => {
@@ -342,10 +339,16 @@ async function loadPlaylist() {
     // Schedules (new format) or items (legacy)
     if (data.schedules && data.schedules.length > 0) {
       schedules = data.schedules;
+      devLog(`Loaded ${schedules.length} schedule(s): ${schedules.map(s => s.name || s.id).join(", ")}`);
+      schedules.forEach(s => {
+        devLog(`  Schedule "${s.name}": ${s.items?.length || 0} items, days=${JSON.stringify(s.daysOfWeek)}, time=${s.startTime}-${s.endTime}`);
+      });
     } else if (data.items && data.items.length > 0) {
       schedules = [{ id: "legacy", name: "Default", items: data.items }];
+      devLog(`Loaded legacy playlist: ${data.items.length} items`);
     } else {
       schedules = [];
+      devLog("No schedules or items received");
     }
 
     // Cache all media files on Android
@@ -417,13 +420,14 @@ function checkScheduleAndPlay() {
   const active = getActiveSchedule();
 
   if (!active) {
-    // No active schedule → screensaver
     if (!isScreensaver) {
+      devLog("No active schedule → screensaver");
       stopPlayback();
       showScreensaver();
     }
     return;
   }
+  devLog(`Active schedule: "${active.name}" with ${active.items.length} items`);
 
   // Active schedule found
   const newItems = active.items;
@@ -452,8 +456,7 @@ function preloadAndPlay() {
   if (isDisplayOff) return;
 
   const item = playlist[currentIndex];
-  hudNowPlaying.textContent = item.name || "";
-  showHudBriefly();
+  devLog(`Playing: ${item.name || "?"} (${item.type})`);
 
   if (item.type === "VIDEO") {
     playVideo(item);
@@ -655,8 +658,10 @@ function applyAudio() {
 async function sendHeartbeat() {
   if (!token || !monitorInfo) return;
   try {
+    const ver = isAndroid ? AndroidBridge.getAppVersion() : "1.0.0";
+    const platform = isAndroid ? "android" : "web";
     const body = {
-      appVersion: isAndroid ? "android-1.0.0" : "web-1.0.0",
+      appVersion: `${platform}-${ver}`,
       nowPlaying: playlist[currentIndex]?.name || null,
     };
 
@@ -675,22 +680,154 @@ async function sendHeartbeat() {
 }
 
 // ============================================================
-// HUD
+// DEV LOG
 // ============================================================
-function updateHud(online) {
-  hudStatus.className = `hud-dot ${online ? "online" : "offline"}`;
-  hudMonitor.textContent = monitorInfo?.name || monitorInfo?.deviceKey || "";
+function devLog(msg) {
+  const ts = new Date().toLocaleTimeString("az-AZ", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const entry = `[${ts}] ${msg}`;
+  console.log(entry);
+  devLogs.push(entry);
+  if (devLogs.length > 200) devLogs.shift();
+  // Update dev panel if open
+  const logEl = document.getElementById("dev-logs");
+  if (logEl) {
+    logEl.textContent = devLogs.slice(-50).join("\n");
+    logEl.scrollTop = logEl.scrollHeight;
+  }
 }
 
-function showHudBriefly() {
-  hud.classList.remove("hidden");
-  hud.classList.add("visible");
-  clearTimeout(hudTimeout);
-  hudTimeout = setTimeout(() => {
-    hud.classList.remove("visible");
-    setTimeout(() => hud.classList.add("hidden"), 300);
-  }, 4000);
+// ============================================================
+// DEV TOOLS PANEL (long press 5s to open)
+// ============================================================
+function createDevTools() {
+  if (document.getElementById("dev-panel")) return;
+
+  const panel = document.createElement("div");
+  panel.id = "dev-panel";
+  panel.style.cssText = `
+    position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.95);
+    color:#fff;font-family:monospace;font-size:12px;overflow-y:auto;padding:16px;
+    display:flex;flex-direction:column;gap:12px;
+  `;
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin:0;font-size:16px;color:#10b981">Dev Tools — Airmyplay Android</h2>
+      <button id="dev-close" style="background:#ef4444;border:none;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">Bağla</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
+        <div style="color:#6b7280;font-size:10px">Status</div>
+        <div id="dev-status" style="color:#10b981;font-size:14px">--</div>
+      </div>
+      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
+        <div style="color:#6b7280;font-size:10px">WebSocket</div>
+        <div id="dev-ws" style="font-size:14px">--</div>
+      </div>
+      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
+        <div style="color:#6b7280;font-size:10px">Monitor</div>
+        <div id="dev-monitor" style="font-size:14px">--</div>
+      </div>
+      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
+        <div style="color:#6b7280;font-size:10px">Version</div>
+        <div id="dev-version" style="font-size:14px">--</div>
+      </div>
+      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
+        <div style="color:#6b7280;font-size:10px">Schedules</div>
+        <div id="dev-schedules" style="font-size:14px">--</div>
+      </div>
+      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
+        <div style="color:#6b7280;font-size:10px">Playlist</div>
+        <div id="dev-playlist" style="font-size:14px">--</div>
+      </div>
+      <div style="background:#1a1a2e;padding:10px;border-radius:8px;grid-column:span 2">
+        <div style="color:#6b7280;font-size:10px">Media Cache</div>
+        <div id="dev-cache" style="font-size:14px">--</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="dev-clear-cache" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Keşi Təmizlə</button>
+      <button id="dev-reload-playlist" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Playlist Yenilə</button>
+      <button id="dev-logout" style="background:#ef4444;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Çıxış</button>
+    </div>
+
+    <div style="flex:1;min-height:0">
+      <div style="color:#6b7280;font-size:10px;margin-bottom:4px">Loglar</div>
+      <pre id="dev-logs" style="background:#0a0a14;padding:10px;border-radius:8px;overflow-y:auto;max-height:300px;white-space:pre-wrap;word-break:break-all;font-size:11px;color:#d1d5db;margin:0"></pre>
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+
+  // Buttons
+  document.getElementById("dev-close").onclick = () => { panel.remove(); devToolsOpen = false; };
+  document.getElementById("dev-clear-cache").onclick = () => {
+    if (isAndroid) { AndroidBridge.clearCache(); devLog("Cache cleared"); }
+    updateDevStats();
+  };
+  document.getElementById("dev-reload-playlist").onclick = () => { loadPlaylist(); devLog("Playlist reload triggered"); };
+  document.getElementById("dev-logout").onclick = () => { panel.remove(); devToolsOpen = false; doLogout(); };
+
+  devToolsOpen = true;
+  updateDevStats();
+
+  // Show logs
+  document.getElementById("dev-logs").textContent = devLogs.slice(-50).join("\n");
 }
+
+function updateDevStats() {
+  const el = (id) => document.getElementById(id);
+  if (!el("dev-panel")) return;
+
+  el("dev-status").textContent = token ? "Online" : "Offline";
+  el("dev-status").style.color = token ? "#10b981" : "#ef4444";
+
+  const wsConnected = socket && socket.connected;
+  el("dev-ws").textContent = wsConnected ? "Bağlı" : "Kəsilib";
+  el("dev-ws").style.color = wsConnected ? "#10b981" : "#ef4444";
+
+  el("dev-monitor").textContent = monitorInfo ? `${monitorInfo.name || ""} (${monitorInfo.deviceKey || ""})` : "N/A";
+
+  const ver = isAndroid ? AndroidBridge.getAppVersion() : "web";
+  el("dev-version").textContent = `${isAndroid ? "Android" : "Web"} v${ver}`;
+
+  el("dev-schedules").textContent = `${schedules.length} cədvəl`;
+  el("dev-playlist").textContent = `${playlist.length} media, index: ${currentIndex}`;
+
+  if (isAndroid) {
+    try {
+      const stats = JSON.parse(AndroidBridge.getCacheStats());
+      el("dev-cache").textContent = `${stats.files || 0} fayl, ${stats.totalSizeMB || 0} MB`;
+    } catch { el("dev-cache").textContent = "N/A"; }
+  } else {
+    el("dev-cache").textContent = "Yalnız Android";
+  }
+}
+
+// Long press handler — 5 seconds to open dev tools
+document.addEventListener("touchstart", (e) => {
+  if (devToolsOpen) return;
+  longPressTimer = setTimeout(() => {
+    createDevTools();
+  }, 5000);
+}, { passive: true });
+
+document.addEventListener("touchend", () => { clearTimeout(longPressTimer); }, { passive: true });
+document.addEventListener("touchmove", () => { clearTimeout(longPressTimer); }, { passive: true });
+
+// Also support mouse (for testing on desktop)
+document.addEventListener("mousedown", (e) => {
+  if (devToolsOpen) return;
+  longPressTimer = setTimeout(() => {
+    createDevTools();
+  }, 5000);
+});
+document.addEventListener("mouseup", () => { clearTimeout(longPressTimer); });
+
+// Update dev stats every 5s if open
+setInterval(() => { if (devToolsOpen) updateDevStats(); }, 5000);
 
 // ============================================================
 // CLOCK (Screensaver)
