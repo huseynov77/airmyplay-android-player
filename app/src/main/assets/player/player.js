@@ -330,6 +330,14 @@ function connectSocket() {
     applyDisplaySettings(data);
   });
 
+  socket.on("monitor_update", (data) => {
+    if (data.name && monitorInfo) {
+      monitorInfo.name = data.name;
+      saveState();
+      devLog(`[WS] Monitor adı yeniləndi: ${data.name}`);
+    }
+  });
+
   socket.on("force_deactivate", (data) => {
     deactivatedMsg.textContent = data.message || "";
     deactivatedOverlay.classList.remove("hidden");
