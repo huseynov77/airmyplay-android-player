@@ -127,6 +127,16 @@ video.media-layer { z-index: 2; }
 #video-a { z-index: 3; }
 #video-b { z-index: 2; }
 
+/* Hide native Android WebView video controls (play button overlay) */
+video::-webkit-media-controls,
+video::-webkit-media-controls-enclosure,
+video::-webkit-media-controls-panel,
+video::-webkit-media-controls-play-button,
+video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
 /* Screensaver */
 #screensaver { z-index: 5; background: #000; display: flex; align-items: center; justify-content: center; }
 #screensaver video, #screensaver img { z-index: 1; }

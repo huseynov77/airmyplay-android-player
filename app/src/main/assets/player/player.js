@@ -19,6 +19,7 @@ let currentIndex = 0;
 let itemTimer = null;
 let screensaverUrl = null;
 let displaySchedule = null;
+let displaySettings = null;
 let audioVolume = 100;
 let audioMuted = false;
 let isScreensaver = false;
@@ -141,7 +142,7 @@ function clearDeviceToken() {
 }
 function saveState() {
   localStorage.setItem("awp_state", JSON.stringify({
-    token, monitorInfo, schedules, screensaverUrl, displaySchedule, audioVolume, audioMuted
+    token, monitorInfo, schedules, screensaverUrl, displaySchedule, audioVolume, audioMuted, displaySettings
   }));
 }
 function loadState() {
@@ -697,6 +698,7 @@ function checkDisplaySchedule() {
 // DISPLAY SETTINGS
 // ============================================================
 function applyDisplaySettings(settings) {
+  displaySettings = settings;
   const fit = settings.objectFit || "cover";
   [videoA, videoB, imageLayer, ssImage, ssVideo].forEach((el) => {
     if (el) el.style.objectFit = fit;
@@ -1014,6 +1016,7 @@ function doLogout() {
       displaySchedule = state.displaySchedule || null;
       audioVolume = state.audioVolume ?? 100;
       audioMuted = state.audioMuted ?? false;
+      if (state.displaySettings) applyDisplaySettings(state.displaySettings);
     }
 
     await doReconnect(deviceToken);
