@@ -21,35 +21,43 @@
             <img src="logo.svg" alt="Airmyplay" class="logo-icon">
             <span class="logo-text">Airmyplay</span>
           </div>
-          <h1 class="hero-title">Android Player</h1>
-          <p class="hero-sub">Kontent oflayn rejimində oynayır.<br>Media faylları cihaza yüklənir.</p>
+          <h1 class="hero-title">Monitoru<br><em>Qoşun</em></h1>
+          <p class="hero-sub">Bağlantı kodu ilə monitoru arxa panelə qoşun.</p>
+          <div class="login-steps">
+            <div class="login-step">
+              <span class="step-num">1</span>
+              <span class="step-text">Arxa paneldə <b>Monitorlar</b> bölməsinə keçin</span>
+            </div>
+            <div class="login-step">
+              <span class="step-num">2</span>
+              <span class="step-text">Monitoru seçib <b>Yarat</b> düyməsinə basın</span>
+            </div>
+            <div class="login-step">
+              <span class="step-num">3</span>
+              <span class="step-text">6 rəqəmli bağlantı kodunu bu ekranda daxil edin</span>
+            </div>
+            <div class="login-step">
+              <span class="step-num">4</span>
+              <span class="step-text">Monitor qoşulur — kod 10 dəqiqə aktivdir</span>
+            </div>
+          </div>
           <div class="feature-pills">
             <div class="pill"><span class="pill-icon">📺</span> Tam ekran kontent</div>
-            <div class="pill"><span class="pill-icon">⚡</span> Real-vaxt yenilənmə</div>
             <div class="pill"><span class="pill-icon">📥</span> Oflayn media keşi</div>
           </div>
         </div>
       </div>
       <div class="login-right">
         <div class="login-form-wrapper">
-          <h2 class="form-title">Cihaz Girişi</h2>
-          <p class="form-sub">Monitor məlumatlarını daxil edin</p>
+          <h2 class="form-title">Bağlantı Kodu</h2>
+          <p class="form-sub">Arxa paneldən aldığınız 6 simvollu kodu daxil edin</p>
           <form id="login-form">
-            <div class="field">
-              <label>Brand adı</label>
-              <input type="text" id="input-brand" placeholder="brandname" autocomplete="off" required>
-            </div>
-            <div class="field">
-              <label>Filial ID</label>
-              <input type="text" id="input-branch" placeholder="filial1" autocomplete="off" required>
-            </div>
-            <div class="field">
-              <label>Monitor Kodu</label>
-              <input type="text" id="input-code" placeholder="A7X9K2" maxlength="6" autocomplete="off" required>
+            <div class="field pairing-field-wrap">
+              <input type="text" id="input-code" placeholder="A7X9K2" maxlength="6" autocomplete="off" autocapitalize="characters" required class="pairing-input">
             </div>
             <div id="login-error" class="error-msg hidden"></div>
             <button type="submit" id="btn-login">
-              <span class="btn-text">Giriş</span>
+              <span class="btn-text">Qoşul</span>
               <span class="btn-loader hidden">⏳</span>
             </button>
           </form>

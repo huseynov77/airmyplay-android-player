@@ -36,8 +36,6 @@ const $ = (id) => document.getElementById(id);
 const loginScreen   = $("login-screen");
 const playerScreen  = $("player-screen");
 const loginForm     = $("login-form");
-const inputBrand    = $("input-brand");
-const inputBranch   = $("input-branch");
 const inputCode     = $("input-code");
 const loginError    = $("login-error");
 const btnLogin      = $("btn-login");
@@ -131,14 +129,14 @@ function getCacheStats() {
 // ============================================================
 // STORAGE
 // ============================================================
-function saveCredentials(brand, branch, code) {
-  localStorage.setItem("awp_cred", JSON.stringify({ brand, branch, code }));
+function saveDeviceToken(deviceToken) {
+  localStorage.setItem("awp_device_token", deviceToken);
 }
-function loadCredentials() {
-  try { return JSON.parse(localStorage.getItem("awp_cred")); } catch { return null; }
+function loadDeviceToken() {
+  return localStorage.getItem("awp_device_token") || null;
 }
-function clearCredentials() {
-  localStorage.removeItem("awp_cred");
+function clearDeviceToken() {
+  localStorage.removeItem("awp_device_token");
   localStorage.removeItem("awp_state");
 }
 function saveState() {
@@ -155,63 +153,84 @@ function loadState() {
 // ============================================================
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  await doLogin(
-    inputBrand.value.trim().toLowerCase().replace(/\s/g, ""),
-    inputBranch.value.trim().toLowerCase().replace(/\s/g, ""),
-    inputCode.value.trim().toUpperCase(),
-    false
-  );
+  await doPair(inputCode.value.trim().toUpperCase());
 });
 
-// Auto-format inputs: brand & branch → lowercase, no spaces
-inputBrand.addEventListener("input", () => {
-  inputBrand.value = inputBrand.value.toLowerCase().replace(/\s/g, "");
-});
-inputBranch.addEventListener("input", () => {
-  inputBranch.value = inputBranch.value.toLowerCase().replace(/\s/g, "");
-});
-// Auto-uppercase monitor code
+// Auto-uppercase pairing code
 inputCode.addEventListener("input", () => {
   inputCode.value = inputCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 });
 
-async function doLogin(brand, branch, code, reconnect = false) {
+async function doPair(pairingCode) {
   loginError.classList.add("hidden");
   btnLogin.disabled = true;
-  btnLogin.querySelector(".btn-text").textContent = "Giriş edilir...";
+  btnLogin.querySelector(".btn-text").textContent = "Qoşulur...";
   btnLogin.querySelector(".btn-loader").classList.remove("hidden");
 
   try {
-    const res = await fetch(`${API_BASE}/device/login`, {
+    const res = await fetch(`${API_BASE}/device/pair`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brandName: brand, branchId: branch, monitorCode: code, reconnect }),
+      body: JSON.stringify({ pairingCode }),
     });
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || "Giriş uğursuz oldu");
+      throw new Error(data.message || "Kod yanlışdır və ya vaxtı keçib");
     }
 
     const data = await res.json();
     token = data.accessToken;
     monitorInfo = data.monitor;
-    saveCredentials(brand, branch, code);
+    saveDeviceToken(data.deviceToken);
     saveState();
     enterPlayer();
   } catch (err) {
-    // If reconnecting offline, enter player silently (screensaver if no schedules)
-    if (reconnect) {
-      devLog("Reconnect failed, entering offline mode");
-      enterPlayer();
-      return;
-    }
     loginError.textContent = err.message || "Giriş uğursuz oldu";
     loginError.classList.remove("hidden");
   } finally {
     btnLogin.disabled = false;
-    btnLogin.querySelector(".btn-text").textContent = "Giriş";
+    btnLogin.querySelector(".btn-text").textContent = "Qoşul";
     btnLogin.querySelector(".btn-loader").classList.add("hidden");
+  }
+}
+
+async function doReconnect(deviceToken) {
+  try {
+    const res = await fetch(`${API_BASE}/device/reconnect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceToken }),
+    });
+
+    if (!res.ok) {
+      // If reconnect fails with network error, try offline mode with cached state
+      const state = loadState();
+      if (state && state.monitorInfo) {
+        devLog("Reconnect failed — entering offline mode with cached data");
+        enterPlayer();
+      } else {
+        clearDeviceToken();
+      }
+      return false;
+    }
+
+    const data = await res.json();
+    token = data.accessToken;
+    monitorInfo = data.monitor;
+    saveState();
+    enterPlayer();
+    return true;
+  } catch {
+    // Network error → offline mode
+    const state = loadState();
+    if (state && state.monitorInfo) {
+      devLog("Network error — entering offline mode with cached data");
+      enterPlayer();
+    } else {
+      clearDeviceToken();
+    }
+    return false;
   }
 }
 
@@ -306,6 +325,11 @@ function connectSocket() {
     checkDisplaySchedule();
   });
 
+  socket.on("display_settings_update", (data) => {
+    devLog("[WS] display_settings_update");
+    applyDisplaySettings(data);
+  });
+
   socket.on("force_deactivate", (data) => {
     deactivatedMsg.textContent = data.message || "";
     deactivatedOverlay.classList.remove("hidden");
@@ -351,6 +375,9 @@ async function loadPlaylist() {
 
     // Display schedule
     if (data.displaySchedule) displaySchedule = data.displaySchedule;
+
+    // Display settings (objectFit, orientation)
+    if (data.displaySettings) applyDisplaySettings(data.displaySettings);
 
     // Schedules (new format) or items (legacy)
     if (data.schedules && data.schedules.length > 0) {
@@ -659,6 +686,16 @@ function checkDisplaySchedule() {
 }
 
 // ============================================================
+// DISPLAY SETTINGS
+// ============================================================
+function applyDisplaySettings(settings) {
+  const fit = settings.objectFit || "cover";
+  [videoA, videoB, imageLayer, ssImage, ssVideo].forEach((el) => {
+    if (el) el.style.objectFit = fit;
+  });
+}
+
+// ============================================================
 // AUDIO
 // ============================================================
 function applyAudio() {
@@ -863,7 +900,7 @@ function showCacheFiles() {
   }
 }
 
-// Triple-tap to open dev tools (3 taps within 1.5s)
+// 10-tap to open dev tools (10 taps within 3s)
 let tapCount = 0;
 let tapTimer = null;
 
@@ -871,9 +908,9 @@ function handleDevTap() {
   if (devToolsOpen) return;
   tapCount++;
   if (tapCount === 1) {
-    tapTimer = setTimeout(() => { tapCount = 0; }, 1500);
+    tapTimer = setTimeout(() => { tapCount = 0; }, 3000);
   }
-  if (tapCount >= 3) {
+  if (tapCount >= 10) {
     clearTimeout(tapTimer);
     tapCount = 0;
     createDevTools();
@@ -881,8 +918,6 @@ function handleDevTap() {
 }
 
 document.addEventListener("touchend", (e) => { handleDevTap(); }, { passive: true });
-// Also support mouse (for testing on desktop)
-document.addEventListener("dblclick", () => { createDevTools(); });
 
 // Update dev stats every 5s if open
 setInterval(() => { if (devToolsOpen) updateDevStats(); }, 5000);
@@ -944,7 +979,7 @@ function doLogout() {
   playlist = [];
   schedules = [];
   currentIndex = 0;
-  clearCredentials();
+  clearDeviceToken();
 
   // Show login
   playerScreen.classList.remove("active");
@@ -955,27 +990,24 @@ function doLogout() {
 }
 
 // ============================================================
-// INIT — Auto-login if credentials saved
+// INIT — Auto-reconnect if deviceToken saved
 // ============================================================
-(function init() {
-  const cred = loadCredentials();
+(async function init() {
+  const deviceToken = loadDeviceToken();
   const state = loadState();
 
-  if (cred && state && state.token && state.monitorInfo) {
-    // Restore state
-    token = state.token;
-    monitorInfo = state.monitorInfo;
-    schedules = state.schedules || [];
-    screensaverUrl = state.screensaverUrl || null;
-    displaySchedule = state.displaySchedule || null;
-    audioVolume = state.audioVolume ?? 100;
-    audioMuted = state.audioMuted ?? false;
+  if (deviceToken) {
+    // Restore cached state while reconnecting
+    if (state && state.monitorInfo) {
+      token = state.token;
+      monitorInfo = state.monitorInfo;
+      schedules = state.schedules || [];
+      screensaverUrl = state.screensaverUrl || null;
+      displaySchedule = state.displaySchedule || null;
+      audioVolume = state.audioVolume ?? 100;
+      audioMuted = state.audioMuted ?? false;
+    }
 
-    // Try reconnect login — if fails (offline), use cached data
-    doLogin(cred.brand, cred.branch, cred.code, true).catch(() => {
-      devLog("Login failed (offline?) — using cached data");
-      // Enter player even without schedules — will show screensaver
-      enterPlayer();
-    });
+    await doReconnect(deviceToken);
   }
 })();

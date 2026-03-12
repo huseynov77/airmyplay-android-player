@@ -57,11 +57,27 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font
 .logo-icon { width: 44px; height: 44px; }
 .logo-text { font-size: 1.4rem; font-weight: 700; }
 .hero-title { font-size: 2.8rem; font-weight: 800; line-height: 1.2; margin-bottom: 0.8rem; }
-.hero-title span { color: var(--purple); }
-.hero-sub { color: var(--dim); font-size: 1rem; line-height: 1.6; margin-bottom: 2rem; }
-.feature-pills { display: flex; flex-direction: column; gap: 12px; }
-.pill { display: flex; align-items: center; gap: 10px; color: var(--dim); font-size: 0.9rem; }
-.pill-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(110,85,255,0.1); font-size: 0.85rem; }
+.hero-title em { font-style: normal; background: linear-gradient(135deg, var(--purple), var(--purple-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.hero-sub { color: var(--dim); font-size: 1rem; line-height: 1.6; margin-bottom: 1.5rem; }
+.login-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 2rem; }
+.login-step { display: flex; align-items: flex-start; gap: 12px; }
+.step-num { width: 26px; height: 26px; border-radius: 50%; background: rgba(110,85,255,0.2); border: 1px solid rgba(110,85,255,0.4); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: var(--purple-light); flex-shrink: 0; }
+.step-text { color: var(--dim); font-size: 0.88rem; line-height: 1.5; padding-top: 3px; }
+.step-text b { color: rgba(255,255,255,0.75); font-weight: 600; }
+.feature-pills { display: flex; flex-direction: row; gap: 10px; flex-wrap: wrap; }
+.pill { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; }
+.pill-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
+
+.pairing-field-wrap { text-align: center; margin-bottom: 1.5rem; }
+.pairing-input {
+  width: 100%; padding: 1rem 1.5rem; background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border); border-radius: 16px; color: var(--white);
+  font-size: 2rem; font-family: 'Courier New', monospace; font-weight: 700;
+  text-align: center; letter-spacing: 12px; outline: none; transition: all 0.2s;
+  text-transform: uppercase;
+}
+.pairing-input::placeholder { color: rgba(255,255,255,0.15); letter-spacing: 8px; font-size: 1.5rem; }
+.pairing-input:focus { border-color: rgba(110,85,255,0.5); box-shadow: 0 0 0 3px rgba(110,85,255,0.15); }
 
 .login-right {
   flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem;
