@@ -31,6 +31,8 @@ let hudTimeout = null;
 let mediaCache = {}; // url -> localPath mapping
 let devToolsOpen = false;
 let devLogs = [];
+let bandwidthConfig = null; // [{startTime, endTime, maxMBps}]
+let recentlyPlayedIds = []; // for shuffle no-repeat tracking
 
 // ---- DOM ----
 const $ = (id) => document.getElementById(id);
@@ -125,6 +127,80 @@ function getCacheStats() {
   } catch (e) {
     return null;
   }
+}
+
+// ============================================================
+// SHUFFLE
+// ============================================================
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function applyShuffleToSchedule(sched) {
+  if (!sched.shuffle || !sched.items || sched.items.length <= 1) return sched;
+  let shuffled = shuffleArray(sched.items);
+  const noRepeat = sched.noRepeatCount || 0;
+  if (noRepeat > 0 && recentlyPlayedIds.length > 0) {
+    // Move recently played items away from the start
+    const recent = new Set(recentlyPlayedIds.slice(-noRepeat));
+    const front = shuffled.filter(i => !recent.has(i.mediaId || i.id));
+    const back = shuffled.filter(i => recent.has(i.mediaId || i.id));
+    shuffled = [...front, ...back];
+  }
+  return { ...sched, items: shuffled };
+}
+
+function trackPlayed(item) {
+  if (!item) return;
+  const id = item.mediaId || item.id;
+  if (!id) return;
+  recentlyPlayedIds.push(id);
+  if (recentlyPlayedIds.length > 50) recentlyPlayedIds.shift();
+}
+
+// ============================================================
+// INVENTORY REPORTING
+// ============================================================
+function reportInventory() {
+  if (!isAndroid || !socket || !monitorInfo) return;
+  try {
+    const filesJson = AndroidBridge.listCacheFiles();
+    const files = typeof filesJson === "string" ? JSON.parse(filesJson) : filesJson;
+    if (Array.isArray(files) && files.length > 0) {
+      socket.emit("inventory_update", {
+        monitorId: monitorInfo.id,
+        files: files.map(f => ({
+          fileName: f.name || f.fileName,
+          fileSize: parseFloat((f.size || f.fileSize || "0").toString()) || 0,
+          mediaId: f.mediaId || null,
+        })),
+      });
+    }
+  } catch (e) {
+    console.warn("[Inventory] Failed to report:", e);
+  }
+}
+
+// ============================================================
+// BANDWIDTH CHECK
+// ============================================================
+function isBandwidthThrottled() {
+  if (!bandwidthConfig || !Array.isArray(bandwidthConfig) || bandwidthConfig.length === 0) return false;
+  const now = new Date();
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  for (const rule of bandwidthConfig) {
+    const [sh, sm] = (rule.startTime || "00:00").split(":").map(Number);
+    const [eh, em] = (rule.endTime || "23:59").split(":").map(Number);
+    const start = sh * 60 + sm;
+    const end = eh * 60 + em;
+    if (curMin >= start && curMin < end) return true;
+  }
+  return false;
 }
 
 // ============================================================
@@ -348,6 +424,23 @@ function connectSocket() {
     deactivatedOverlay.classList.add("hidden");
     loadPlaylist();
   });
+
+  socket.on("clear_cache", () => {
+    devLog("[WS] clear_cache received");
+    if (isAndroid) {
+      try {
+        AndroidBridge.clearCache();
+        devLog("[Cache] Cache cleared by admin");
+      } catch (e) {
+        devLog("[Cache] Error clearing cache: " + e);
+      }
+    }
+  });
+
+  socket.on("bandwidth_config", (config) => {
+    devLog("[WS] bandwidth_config received: " + JSON.stringify(config));
+    bandwidthConfig = config;
+  });
 }
 
 // ============================================================
@@ -410,7 +503,12 @@ async function loadPlaylist() {
           await cachePlaylistMedia(sched.items);
         }
       }
+      // Report inventory after caching
+      setTimeout(reportInventory, 2000);
     }
+
+    // Apply shuffle to each schedule that has it enabled
+    schedules = schedules.map(sched => applyShuffleToSchedule(sched));
 
     saveState();
     checkScheduleAndPlay();
@@ -518,18 +616,34 @@ function preloadAndPlay() {
 }
 
 function playVideo(item) {
-  // Hide image
-  imageLayer.classList.add("hidden");
+  // Clear any leftover oncanplay from previous video load
+  activeVideo.oncanplay = null;
+  nextVideo.oncanplay = null;
 
   const url = getMediaUrl(item);
 
-  // Setup active video
+  // Setup active video — keep hidden until first frame ready (avoids play-button flash)
   activeVideo.src = url;
   activeVideo.currentTime = 0;
   activeVideo.muted = audioMuted;
   activeVideo.volume = audioVolume / 100;
-  activeVideo.classList.remove("hidden");
+  activeVideo.classList.add("hidden");
   activeVideo.style.zIndex = 10;
+
+  let videoShown = false;
+  const showVideo = () => {
+    if (videoShown) return;
+    videoShown = true;
+    // Hide previous layer only when new video is ready — no black flash
+    imageLayer.classList.add("hidden");
+    nextVideo.classList.add("hidden");
+    activeVideo.classList.remove("hidden");
+    activeVideo.style.opacity = '1';
+  };
+  activeVideo.oncanplay = showVideo;
+  // If already buffered (preloaded), canplay won't fire again — check readyState
+  if (activeVideo.readyState >= 3) showVideo();
+  else setTimeout(showVideo, 500); // fallback
 
   // Preload next
   preloadNext();
@@ -560,6 +674,9 @@ function playVideo(item) {
 }
 
 function playImage(item) {
+  // Clear any leftover oncanplay callbacks — prevent ghost video appearing over image
+  activeVideo.oncanplay = null;
+  nextVideo.oncanplay = null;
   // Hide videos
   activeVideo.classList.add("hidden");
   nextVideo.classList.add("hidden");
@@ -575,9 +692,12 @@ function playImage(item) {
   // Preload next
   preloadNext();
 
-  const duration = (item.duration || 10) * 1000;
   clearTimeout(itemTimer);
-  itemTimer = setTimeout(advanceToNext, duration);
+  if (playlist.length > 1) {
+    const duration = (item.duration || 10) * 1000;
+    itemTimer = setTimeout(advanceToNext, duration);
+  }
+  // Single image: stay on screen indefinitely (no timer)
 }
 
 function preloadNext() {
@@ -703,6 +823,10 @@ function applyDisplaySettings(settings) {
   [videoA, videoB, imageLayer, ssImage, ssVideo].forEach((el) => {
     if (el) el.style.objectFit = fit;
   });
+  // Orientation — Android native rotation
+  if (isAndroid && settings.orientation) {
+    try { AndroidBridge.setOrientation(settings.orientation); } catch (e) {}
+  }
 }
 
 // ============================================================

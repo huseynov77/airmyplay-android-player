@@ -1,6 +1,7 @@
 package com.airmyplay.player
 
 import android.annotation.SuppressLint
+import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -248,6 +249,16 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getAppVersion(): String {
             return try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0" } catch (_: Exception) { "1.2.0" }
+        }
+
+        @JavascriptInterface
+        fun setOrientation(orientation: String) {
+            runOnUiThread {
+                requestedOrientation = when (orientation.lowercase()) {
+                    "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    else -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                }
+            }
         }
 
         private fun md5(input: String): String {
