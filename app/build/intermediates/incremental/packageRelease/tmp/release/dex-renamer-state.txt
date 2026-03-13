@@ -1,0 +1,4 @@
+#Sat Mar 14 00:38:15 AZT 2026
+base.0=D\:\\Airmyplay\\android-player\\app\\build\\intermediates\\dex\\release\\mergeDexRelease\\classes.dex
+path.0=classes.dex
+renamed.0=classes.dex

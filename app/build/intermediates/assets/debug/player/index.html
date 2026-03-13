@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Airmyplay</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- LOGIN SCREEN -->
+  <div id="login-screen" class="screen active">
+    <div class="login-container">
+      <div class="login-left">
+        <div class="login-mesh"></div>
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="login-left-content">
+          <div class="logo-row">
+            <img src="logo.svg" alt="Airmyplay" class="logo-icon">
+            <span class="logo-text">Airmyplay</span>
+          </div>
+          <h1 class="hero-title">Monitoru<br><em>Qoşun</em></h1>
+          <p class="hero-sub">Bağlantı kodu ilə monitoru arxa panelə qoşun.</p>
+          <div class="login-steps">
+            <div class="login-step">
+              <span class="step-num">1</span>
+              <span class="step-text">Arxa paneldə <b>Monitorlar</b> bölməsinə keçin</span>
+            </div>
+            <div class="login-step">
+              <span class="step-num">2</span>
+              <span class="step-text">Monitoru seçib <b>Yarat</b> düyməsinə basın</span>
+            </div>
+            <div class="login-step">
+              <span class="step-num">3</span>
+              <span class="step-text">6 rəqəmli bağlantı kodunu bu ekranda daxil edin</span>
+            </div>
+            <div class="login-step">
+              <span class="step-num">4</span>
+              <span class="step-text">Monitor qoşulur — kod 10 dəqiqə aktivdir</span>
+            </div>
+          </div>
+          <div class="feature-pills">
+            <div class="pill"><span class="pill-icon">📺</span> Tam ekran kontent</div>
+            <div class="pill"><span class="pill-icon">📥</span> Oflayn media keşi</div>
+          </div>
+        </div>
+      </div>
+      <div class="login-right">
+        <div class="login-form-wrapper">
+          <h2 class="form-title">Bağlantı Kodu</h2>
+          <p class="form-sub">Arxa paneldən aldığınız 6 simvollu kodu daxil edin</p>
+          <form id="login-form">
+            <div class="field pairing-field-wrap">
+              <input type="text" id="input-code" placeholder="A7X9K2" maxlength="6" autocomplete="off" autocapitalize="characters" required class="pairing-input">
+            </div>
+            <div id="login-error" class="error-msg hidden"></div>
+            <button type="submit" id="btn-login">
+              <span class="btn-text">Qoşul</span>
+              <span class="btn-loader hidden">⏳</span>
+            </button>
+          </form>
+          <div class="login-footer">
+            <span>airmyplay.com</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLAYER SCREEN -->
+  <div id="player-screen" class="screen">
+    <!-- Media layers -->
+    <video id="video-a" class="media-layer" playsinline muted></video>
+    <video id="video-b" class="media-layer" playsinline muted></video>
+    <img id="image-layer" class="media-layer" alt="">
+
+    <!-- Screensaver -->
+    <div id="screensaver" class="media-layer hidden">
+      <video id="screensaver-video" class="media-layer" playsinline muted loop></video>
+      <img id="screensaver-image" class="media-layer" alt="">
+      <div id="screensaver-default" class="screensaver-default">
+        <img src="logo.svg" alt="Airmyplay" class="ss-logo">
+        <div id="ss-clock" class="ss-clock"></div>
+        <div class="ss-label">Airmyplay</div>
+      </div>
+    </div>
+
+    <!-- Display off overlay -->
+    <div id="display-off" class="overlay hidden">
+      <div class="display-off-content">
+        <div class="display-off-icon">🌙</div>
+      </div>
+    </div>
+
+    <!-- HUD removed — dev tools via long press 5s -->
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="overlay">
+      <div class="loading-content">
+        <img src="logo.svg" alt="" class="loading-logo">
+        <div class="loading-text">Yüklənir...</div>
+        <div id="loading-detail" class="loading-detail"></div>
+      </div>
+    </div>
+
+    <!-- Deactivated overlay -->
+    <div id="deactivated-overlay" class="overlay hidden">
+      <div class="deactivated-content">
+        <div class="deactivated-icon">⚠️</div>
+        <div class="deactivated-text">Hesab deaktiv edilib</div>
+        <div id="deactivated-msg" class="deactivated-sub"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.IO -->
+  <script src="socket.io.min.js"></script>
+  <script src="player.js"></script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.airmyplay.player"
+4    android:versionCode="18"
+5    android:versionName="1.8.8" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:4:5-67
+11-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:5:5-79
+12-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:5:22-76
+13    <uses-permission android:name="android.permission.WAKE_LOCK" />
+13-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:6:5-68
+13-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:6:22-65
+14    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+14-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:7:5-81
+14-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:7:22-78
+15
+16    <!-- Declare TV feature as optional so it works on both TV and mobile -->
+17    <uses-feature
+17-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:10:5-87
+18        android:name="android.software.leanback"
+18-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:10:19-59
+19        android:required="false" />
+19-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:10:60-84
+20    <uses-feature
+20-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:11:5-90
+21        android:name="android.hardware.touchscreen"
+21-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:11:19-62
+22        android:required="false" />
+22-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:11:63-87
+23
+24    <permission
+24-->[androidx.core:core:1.12.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\4dde0fce54f6341b6da19770f76a2130\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
+25        android:name="com.airmyplay.player.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+25-->[androidx.core:core:1.12.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\4dde0fce54f6341b6da19770f76a2130\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
+26        android:protectionLevel="signature" />
+26-->[androidx.core:core:1.12.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\4dde0fce54f6341b6da19770f76a2130\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
+27
+28    <uses-permission android:name="com.airmyplay.player.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+28-->[androidx.core:core:1.12.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\4dde0fce54f6341b6da19770f76a2130\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
+28-->[androidx.core:core:1.12.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\4dde0fce54f6341b6da19770f76a2130\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+29
+30    <application
+30-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:13:5-50:19
+31        android:allowBackup="false"
+31-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:14:9-36
+32        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+32-->[androidx.core:core:1.12.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\4dde0fce54f6341b6da19770f76a2130\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
+33        android:banner="@drawable/banner"
+33-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:19:9-42
+34        android:extractNativeLibs="false"
+35        android:icon="@mipmap/ic_launcher"
+35-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:15:9-43
+36        android:label="Airmyplay"
+36-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:17:9-34
+37        android:roundIcon="@mipmap/ic_launcher_round"
+37-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:16:9-54
+38        android:supportsRtl="true"
+38-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:20:9-35
+39        android:theme="@style/AppTheme" >
+39-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:18:9-40
+40
+41        <!-- Main Activity -->
+42        <activity
+42-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:23:9-37:20
+43            android:name="com.airmyplay.player.MainActivity"
+43-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:24:13-41
+44            android:configChanges="orientation|screenSize|keyboardHidden"
+44-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:25:13-74
+45            android:exported="true"
+45-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:26:13-36
+46            android:keepScreenOn="true"
+46-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:27:13-40
+47            android:launchMode="singleTask"
+47-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:28:13-44
+48            android:screenOrientation="landscape"
+48-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:29:13-50
+49            android:theme="@style/AppTheme" >
+49-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:30:13-44
+50            <intent-filter>
+50-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:31:13-36:29
+51                <action android:name="android.intent.action.MAIN" />
+51-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:32:17-69
+51-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:32:25-66
+52
+53                <category android:name="android.intent.category.LAUNCHER" />
+53-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:33:17-77
+53-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:33:27-74
+54                <!-- Android TV launcher -->
+55                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+55-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:35:17-86
+55-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:35:27-83
+56            </intent-filter>
+57        </activity>
+58
+59        <!-- Boot Receiver — auto-start on boot -->
+60        <receiver
+60-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:40:9-48:20
+61            android:name="com.airmyplay.player.BootReceiver"
+61-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:41:13-41
+62            android:enabled="true"
+62-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:42:13-35
+63            android:exported="true" >
+63-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:43:13-36
+64            <intent-filter>
+64-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:44:13-47:29
+65                <action android:name="android.intent.action.BOOT_COMPLETED" />
+65-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:45:17-79
+65-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:45:25-76
+66                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+66-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:46:17-82
+66-->D:\Airmyplay\android-player\app\src\main\AndroidManifest.xml:46:25-79
+67            </intent-filter>
+68        </receiver>
+69
+70        <provider
+70-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\ebd7e8b0739ea5852a86f1ec4bdee03d\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+71            android:name="androidx.startup.InitializationProvider"
+71-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\ebd7e8b0739ea5852a86f1ec4bdee03d\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
+72            android:authorities="com.airmyplay.player.androidx-startup"
+72-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\ebd7e8b0739ea5852a86f1ec4bdee03d\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
+73            android:exported="false" >
+73-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\ebd7e8b0739ea5852a86f1ec4bdee03d\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
+74            <meta-data
+74-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\ebd7e8b0739ea5852a86f1ec4bdee03d\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+75                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+75-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\ebd7e8b0739ea5852a86f1ec4bdee03d\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
+76                android:value="androidx.startup" />
+76-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Huseynov PC\.gradle\caches\transforms-3\ebd7e8b0739ea5852a86f1ec4bdee03d\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
+77            <meta-data
+77-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\Huseynov PC\.gradle\caches\transforms-3\e31b4c49acd42e650810370e70a68f68\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:31:13-33:52
+78                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+78-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\Huseynov PC\.gradle\caches\transforms-3\e31b4c49acd42e650810370e70a68f68\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:32:17-78
+79                android:value="androidx.startup" />
+79-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\Huseynov PC\.gradle\caches\transforms-3\e31b4c49acd42e650810370e70a68f68\transformed\lifecycle-process-2.4.1\AndroidManifest.xml:33:17-49
+80        </provider>
+81    </application>
+82
+83</manifest>

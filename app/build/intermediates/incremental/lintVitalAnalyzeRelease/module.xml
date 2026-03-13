@@ -1,0 +1,19 @@
+<lint-module
+    format="1"
+    dir="D:\Airmyplay\android-player\app"
+    name=":app"
+    type="APP"
+    maven="AirmyplayPlayer:app:"
+    agpVersion="8.2.2"
+    buildFolder="build"
+    bootClassPath="D:\AndroidSDK\platforms\android-35\android.jar;D:\AndroidSDK\build-tools\34.0.0\core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-35"
+    neverShrinking="true">
+  <lintOptions
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="release"/>
+</lint-module>

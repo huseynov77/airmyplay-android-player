@@ -2,6 +2,7 @@ package com.airmyplay.player
 
 import android.annotation.SuppressLint
 import android.content.pm.ActivityInfo
+import org.json.JSONArray
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -23,6 +24,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var mediaCacheDir: File
+    // Bandwidth throttle: list of {startTime, endTime, maxMBps} rules
+    private var bandwidthRules: List<Map<String, Any>> = emptyList()
 
     companion object {
         // Use API domain as base URL to avoid CORS issues with fetch() calls
@@ -165,6 +168,21 @@ class MainActivity : AppCompatActivity() {
     // ============================================================
     // JavaScript Bridge
     // ============================================================
+    private fun getThrottleLimitBytes(): Long {
+        if (bandwidthRules.isEmpty()) return 0L
+        val now = java.util.Calendar.getInstance()
+        val curMin = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+        for (rule in bandwidthRules) {
+            val start = (rule["startTime"] as? String ?: "00:00").split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+            val end = (rule["endTime"] as? String ?: "23:59").split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+            if (curMin >= start && curMin < end) {
+                val mbps = (rule["maxMBps"] as? Double ?: 0.0)
+                return (mbps * 1024 * 1024).toLong()
+            }
+        }
+        return 0L
+    }
+
     inner class AndroidBridge {
 
         @JavascriptInterface
@@ -200,7 +218,27 @@ class MainActivity : AppCompatActivity() {
 
                 conn.inputStream.use { input ->
                     FileOutputStream(tmpFile).use { output ->
-                        input.copyTo(output, 8192)
+                        val buffer = ByteArray(65536) // 64KB chunks
+                        var bytesRead: Int
+                        var bytesThisWindow = 0L
+                        var windowStart = System.currentTimeMillis()
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            bytesThisWindow += bytesRead
+                            val maxBytes = getThrottleLimitBytes()
+                            if (maxBytes > 0) {
+                                val elapsed = System.currentTimeMillis() - windowStart
+                                if (bytesThisWindow >= maxBytes) {
+                                    val delay = (1000L - elapsed).coerceAtLeast(0L)
+                                    if (delay > 0) Thread.sleep(delay)
+                                    bytesThisWindow = 0L
+                                    windowStart = System.currentTimeMillis()
+                                } else if (elapsed >= 1000) {
+                                    bytesThisWindow = 0L
+                                    windowStart = System.currentTimeMillis()
+                                }
+                            }
+                        }
                     }
                 }
                 conn.disconnect()
@@ -249,6 +287,23 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getAppVersion(): String {
             return try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0" } catch (_: Exception) { "1.2.0" }
+        }
+
+        @JavascriptInterface
+        fun setBandwidthConfig(json: String) {
+            try {
+                val arr = JSONArray(json)
+                val rules = mutableListOf<Map<String, Any>>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    rules.add(mapOf(
+                        "startTime" to obj.optString("startTime", "00:00"),
+                        "endTime" to obj.optString("endTime", "23:59"),
+                        "maxMBps" to obj.optDouble("maxMBps", 0.0)
+                    ))
+                }
+                bandwidthRules = rules
+            } catch (_: Exception) {}
         }
 
         @JavascriptInterface
