@@ -606,6 +606,7 @@ function preloadAndPlay() {
   if (isDisplayOff) return;
 
   const item = playlist[currentIndex];
+  trackPlayed(item);
   devLog(`Playing: ${item.name || "?"} (${item.type})`);
 
   if (item.type === "VIDEO") {
@@ -727,7 +728,17 @@ function advanceToNext() {
   nextVideo.style.zIndex = 1;
   nextVideo.pause();
 
-  currentIndex = (currentIndex + 1) % playlist.length;
+  const next = (currentIndex + 1) % playlist.length;
+  if (next === 0) {
+    const active = getActiveSchedule();
+    if (active && active.shuffle) {
+      const reshuffled = applyShuffleToSchedule(active);
+      const idx = schedules.findIndex(s => s.id === active.id);
+      if (idx !== -1) schedules[idx] = reshuffled;
+      playlist = reshuffled.items;
+    }
+  }
+  currentIndex = next;
   preloadAndPlay();
 }
 
