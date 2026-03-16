@@ -33,6 +33,7 @@ let devToolsOpen = false;
 let devLogs = [];
 let bandwidthConfig = null; // [{startTime, endTime, maxMBps}]
 let recentlyPlayedIds = []; // for shuffle no-repeat tracking
+let cacheAbortFlag = false; // yeni playlist gələndə köhnə cache-i dayandır
 
 // ---- DOM ----
 const $ = (id) => document.getElementById(id);
@@ -45,6 +46,7 @@ const btnLogin      = $("btn-login");
 const videoA        = $("video-a");
 const videoB        = $("video-b");
 const imageLayer    = $("image-layer");
+const webLayer      = $("web-layer");
 const screensaverEl = $("screensaver");
 const ssVideo       = $("screensaver-video");
 const ssImage       = $("screensaver-image");
@@ -89,12 +91,12 @@ async function cacheMediaFile(url) {
 async function cachePlaylistMedia(items) {
   if (!isAndroid || !items || items.length === 0) return;
 
-  loadingDetail.textContent = "Media faylları yüklənir...";
-
   for (let i = 0; i < items.length; i++) {
+    if (cacheAbortFlag) {
+      devLog("INFO", "Cache dayandırıldı — yeni playlist gəldi");
+      break;
+    }
     const item = items[i];
-    loadingDetail.textContent = `Media yüklənir (${i + 1}/${items.length}): ${item.name || ''}`;
-
     try {
       const localUrl = await cacheMediaFile(item.url);
       if (localUrl !== item.url) {
@@ -105,6 +107,7 @@ async function cachePlaylistMedia(items) {
     }
   }
 
+  cacheAbortFlag = false;
   loadingDetail.textContent = "";
 }
 
@@ -362,6 +365,7 @@ function connectSocket() {
 
   socket.on("playlist_update", () => {
     devLog("[WS] playlist_update received");
+    cacheAbortFlag = true; // köhnə cache-i dayandır
     loadPlaylist();
   });
 
@@ -499,23 +503,26 @@ async function loadPlaylist() {
       devLog("No schedules or items received");
     }
 
-    // Cache all media files on Android
-    if (isAndroid) {
-      for (const sched of schedules) {
-        if (sched.items && sched.items.length > 0) {
-          await cachePlaylistMedia(sched.items);
-        }
-      }
-      // Report inventory after caching
-      setTimeout(reportInventory, 2000);
-    }
-
     // Apply shuffle to each schedule that has it enabled
     schedules = schedules.map(sched => applyShuffleToSchedule(sched));
 
     saveState();
-    checkScheduleAndPlay();
+    checkScheduleAndPlay();   // dərhal oyna — download-u gözləmə
     checkDisplaySchedule();
+
+    // Cache media in background (no await) — abort flag stops old downloads
+    if (isAndroid) {
+      cacheAbortFlag = true; // köhnə cache-i dayandır
+      setTimeout(async () => {
+        cacheAbortFlag = false;
+        for (const sched of schedules) {
+          if (sched.items && sched.items.length > 0) {
+            await cachePlaylistMedia(sched.items);
+          }
+        }
+        setTimeout(reportInventory, 1000);
+      }, 0);
+    }
 
     // Hide loading overlay
     loadingOverlay.classList.add("hidden");
@@ -614,6 +621,8 @@ function preloadAndPlay() {
 
   if (item.type === "VIDEO") {
     playVideo(item);
+  } else if (item.type === "URL" || item.type === "HTML") {
+    playWebPage(item);
   } else {
     playImage(item);
   }
@@ -638,16 +647,19 @@ function playVideo(item) {
   const showVideo = () => {
     if (videoShown) return;
     videoShown = true;
+    clearTimeout(skipTimer);
     // Hide previous layer only when new video is ready — no black flash
     imageLayer.classList.add("hidden");
     nextVideo.classList.add("hidden");
     activeVideo.classList.remove("hidden");
     activeVideo.style.opacity = '1';
+    activeVideo.oncanplay = null;
+    activeVideo.onplaying = null;
   };
   activeVideo.oncanplay = showVideo;
+  activeVideo.onplaying = showVideo;
   // If already buffered (preloaded), canplay won't fire again — check readyState
   if (activeVideo.readyState >= 3) showVideo();
-  else setTimeout(showVideo, 500); // fallback
 
   // Preload next
   preloadNext();
@@ -659,19 +671,37 @@ function playVideo(item) {
     activeVideo.play().catch(() => {});
   });
 
-  // Use item duration or video end
   const duration = (item.duration || 30) * 1000;
 
-  activeVideo.onended = () => { advanceToNext(); };
+  // If video doesn't start in 5s (file missing / network issue) → skip
+  const skipTimer = setTimeout(() => {
+    if (!videoShown) {
+      activeVideo.oncanplay = null;
+      activeVideo.onplaying = null;
+      activeVideo.onended = null;
+      activeVideo.onerror = null;
+      activeVideo.classList.add("hidden");
+      clearTimeout(itemTimer);
+      advanceToNext();
+    }
+  }, 5000);
+
+  activeVideo.onended = () => {
+    clearTimeout(skipTimer);
+    clearTimeout(itemTimer);
+    advanceToNext();
+  };
   activeVideo.onerror = () => {
     console.warn("[Video] Error playing:", item.name);
+    clearTimeout(skipTimer);
+    activeVideo.classList.add("hidden");
     clearTimeout(itemTimer);
-    itemTimer = setTimeout(advanceToNext, 3000);
+    itemTimer = setTimeout(advanceToNext, 1000);
   };
 
-  // Fallback timer (in case onended doesn't fire)
   clearTimeout(itemTimer);
   itemTimer = setTimeout(() => {
+    clearTimeout(skipTimer);
     activeVideo.pause();
     advanceToNext();
   }, duration + 2000);
@@ -704,6 +734,22 @@ function playImage(item) {
   // Single image: stay on screen indefinitely (no timer)
 }
 
+function playWebPage(item) {
+  activeVideo.classList.add("hidden");
+  nextVideo.classList.add("hidden");
+  activeVideo.pause();
+  nextVideo.pause();
+  imageLayer.classList.add("hidden");
+
+  webLayer.src = item.url;
+  webLayer.classList.remove("hidden");
+  webLayer.style.zIndex = 10;
+
+  clearTimeout(itemTimer);
+  const duration = (item.duration || 30) * 1000;
+  itemTimer = setTimeout(advanceToNext, duration);
+}
+
 function preloadNext() {
   const nextIndex = (currentIndex + 1) % playlist.length;
   const nextItem = playlist[nextIndex];
@@ -722,6 +768,8 @@ function preloadNext() {
 
 function advanceToNext() {
   clearTimeout(itemTimer);
+  webLayer.classList.add("hidden");
+  webLayer.src = "about:blank";
 
   // Swap video buffers
   const tmp = activeVideo;
@@ -752,6 +800,8 @@ function stopPlayback() {
   activeVideo.classList.add("hidden");
   nextVideo.classList.add("hidden");
   imageLayer.classList.add("hidden");
+  webLayer.classList.add("hidden");
+  webLayer.src = "about:blank";
 }
 
 // ============================================================
