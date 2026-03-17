@@ -23,27 +23,22 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
 
-      - name: Generate signing keystore
-        run: |
-          keytool -genkeypair -v \
-            -keystore app/release.keystore \
-            -alias airmyplay \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass airmyplay2026 -keypass airmyplay2026 \
-            -dname "CN=Airmyplay, OU=Mobile, O=Airmyplay, L=Baku, ST=Baku, C=AZ"
-
       - name: Build Release APK
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease
 
+      - name: Get version name
+        id: version
+        run: echo "name=$(grep versionName app/build.gradle | grep -oP '\"[^\"]+\"' | tr -d '\"')" >> $GITHUB_OUTPUT
+
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Airmyplay.apk
+        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Airmyplay-${{ steps.version.outputs.name }}.apk
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Airmyplay Player - Latest
-          files: app/build/outputs/apk/release/Airmyplay.apk
+          files: app/build/outputs/apk/release/Airmyplay-${{ steps.version.outputs.name }}.apk
           make_latest: true
