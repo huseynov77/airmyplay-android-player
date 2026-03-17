@@ -51,7 +51,7 @@
         <div class="login-form-wrapper">
           <h2 class="form-title">Bağlantı Kodu</h2>
           <p class="form-sub">Arxa paneldən aldığınız 6 simvollu kodu daxil edin</p>
-          <form id="login-form">
+          <form id="login-form" onsubmit="return false;">
             <div class="field pairing-field-wrap">
               <input type="text" id="input-code" placeholder="A7X9K2" maxlength="6" autocomplete="off" autocapitalize="characters" required class="pairing-input">
             </div>
@@ -75,6 +75,7 @@
     <video id="video-a" class="media-layer" playsinline muted></video>
     <video id="video-b" class="media-layer" playsinline muted></video>
     <img id="image-layer" class="media-layer" alt="">
+    <iframe id="web-layer" class="media-layer hidden" style="border:none;" allowfullscreen></iframe>
 
     <!-- Screensaver -->
     <div id="screensaver" class="media-layer hidden">

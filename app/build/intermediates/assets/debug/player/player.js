@@ -19,6 +19,7 @@ let currentIndex = 0;
 let itemTimer = null;
 let screensaverUrl = null;
 let displaySchedule = null;
+let displaySettings = null;
 let audioVolume = 100;
 let audioMuted = false;
 let isScreensaver = false;
@@ -30,6 +31,9 @@ let hudTimeout = null;
 let mediaCache = {}; // url -> localPath mapping
 let devToolsOpen = false;
 let devLogs = [];
+let bandwidthConfig = null; // [{startTime, endTime, maxMBps}]
+let recentlyPlayedIds = []; // for shuffle no-repeat tracking
+let cacheAbortFlag = false; // yeni playlist gələndə köhnə cache-i dayandır
 
 // ---- DOM ----
 const $ = (id) => document.getElementById(id);
@@ -42,6 +46,7 @@ const btnLogin      = $("btn-login");
 const videoA        = $("video-a");
 const videoB        = $("video-b");
 const imageLayer    = $("image-layer");
+const webLayer      = $("web-layer");
 const screensaverEl = $("screensaver");
 const ssVideo       = $("screensaver-video");
 const ssImage       = $("screensaver-image");
@@ -86,12 +91,12 @@ async function cacheMediaFile(url) {
 async function cachePlaylistMedia(items) {
   if (!isAndroid || !items || items.length === 0) return;
 
-  loadingDetail.textContent = "Media faylları yüklənir...";
-
   for (let i = 0; i < items.length; i++) {
+    if (cacheAbortFlag) {
+      devLog("INFO", "Cache dayandırıldı — yeni playlist gəldi");
+      break;
+    }
     const item = items[i];
-    loadingDetail.textContent = `Media yüklənir (${i + 1}/${items.length}): ${item.name || ''}`;
-
     try {
       const localUrl = await cacheMediaFile(item.url);
       if (localUrl !== item.url) {
@@ -102,6 +107,7 @@ async function cachePlaylistMedia(items) {
     }
   }
 
+  cacheAbortFlag = false;
   loadingDetail.textContent = "";
 }
 
@@ -127,6 +133,80 @@ function getCacheStats() {
 }
 
 // ============================================================
+// SHUFFLE
+// ============================================================
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function applyShuffleToSchedule(sched) {
+  if (!sched.shuffle || !sched.items || sched.items.length <= 1) return sched;
+  let shuffled = shuffleArray(sched.items);
+  const noRepeat = sched.noRepeatCount || 0;
+  if (noRepeat > 0 && recentlyPlayedIds.length > 0) {
+    // Move recently played items away from the start
+    const recent = new Set(recentlyPlayedIds.slice(-noRepeat));
+    const front = shuffled.filter(i => !recent.has(i.mediaId || i.id));
+    const back = shuffled.filter(i => recent.has(i.mediaId || i.id));
+    shuffled = [...front, ...back];
+  }
+  return { ...sched, items: shuffled };
+}
+
+function trackPlayed(item) {
+  if (!item) return;
+  const id = item.mediaId || item.id;
+  if (!id) return;
+  recentlyPlayedIds.push(id);
+  if (recentlyPlayedIds.length > 50) recentlyPlayedIds.shift();
+}
+
+// ============================================================
+// INVENTORY REPORTING
+// ============================================================
+function reportInventory() {
+  if (!isAndroid || !socket || !monitorInfo) return;
+  try {
+    const filesJson = AndroidBridge.listCacheFiles();
+    const files = typeof filesJson === "string" ? JSON.parse(filesJson) : filesJson;
+    if (Array.isArray(files) && files.length > 0) {
+      socket.emit("inventory_update", {
+        monitorId: monitorInfo.id,
+        files: files.map(f => ({
+          fileName: f.name || f.fileName,
+          fileSize: parseFloat((f.size || f.fileSize || "0").toString()) || 0,
+          mediaId: f.mediaId || null,
+        })),
+      });
+    }
+  } catch (e) {
+    console.warn("[Inventory] Failed to report:", e);
+  }
+}
+
+// ============================================================
+// BANDWIDTH CHECK
+// ============================================================
+function isBandwidthThrottled() {
+  if (!bandwidthConfig || !Array.isArray(bandwidthConfig) || bandwidthConfig.length === 0) return false;
+  const now = new Date();
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  for (const rule of bandwidthConfig) {
+    const [sh, sm] = (rule.startTime || "00:00").split(":").map(Number);
+    const [eh, em] = (rule.endTime || "23:59").split(":").map(Number);
+    const start = sh * 60 + sm;
+    const end = eh * 60 + em;
+    if (curMin >= start && curMin < end) return true;
+  }
+  return false;
+}
+
+// ============================================================
 // STORAGE
 // ============================================================
 function saveDeviceToken(deviceToken) {
@@ -141,7 +221,7 @@ function clearDeviceToken() {
 }
 function saveState() {
   localStorage.setItem("awp_state", JSON.stringify({
-    token, monitorInfo, schedules, screensaverUrl, displaySchedule, audioVolume, audioMuted
+    token, monitorInfo, schedules, screensaverUrl, displaySchedule, audioVolume, audioMuted, displaySettings
   }));
 }
 function loadState() {
@@ -285,6 +365,7 @@ function connectSocket() {
 
   socket.on("playlist_update", () => {
     devLog("[WS] playlist_update received");
+    cacheAbortFlag = true; // köhnə cache-i dayandır
     loadPlaylist();
   });
 
@@ -347,6 +428,26 @@ function connectSocket() {
     deactivatedOverlay.classList.add("hidden");
     loadPlaylist();
   });
+
+  socket.on("clear_cache", () => {
+    devLog("[WS] clear_cache received");
+    if (isAndroid) {
+      try {
+        AndroidBridge.clearCache();
+        devLog("[Cache] Cache cleared by admin");
+      } catch (e) {
+        devLog("[Cache] Error clearing cache: " + e);
+      }
+    }
+  });
+
+  socket.on("bandwidth_config", (config) => {
+    devLog("[WS] bandwidth_config received: " + JSON.stringify(config));
+    bandwidthConfig = config;
+    if (isAndroid) {
+      try { AndroidBridge.setBandwidthConfig(JSON.stringify(config || [])); } catch (e) {}
+    }
+  });
 }
 
 // ============================================================
@@ -402,18 +503,26 @@ async function loadPlaylist() {
       devLog("No schedules or items received");
     }
 
-    // Cache all media files on Android
-    if (isAndroid) {
-      for (const sched of schedules) {
-        if (sched.items && sched.items.length > 0) {
-          await cachePlaylistMedia(sched.items);
-        }
-      }
-    }
+    // Apply shuffle to each schedule that has it enabled
+    schedules = schedules.map(sched => applyShuffleToSchedule(sched));
 
     saveState();
-    checkScheduleAndPlay();
+    checkScheduleAndPlay();   // dərhal oyna — download-u gözləmə
     checkDisplaySchedule();
+
+    // Cache media in background (no await) — abort flag stops old downloads
+    if (isAndroid) {
+      cacheAbortFlag = true; // köhnə cache-i dayandır
+      setTimeout(async () => {
+        cacheAbortFlag = false;
+        for (const sched of schedules) {
+          if (sched.items && sched.items.length > 0) {
+            await cachePlaylistMedia(sched.items);
+          }
+        }
+        setTimeout(reportInventory, 1000);
+      }, 0);
+    }
 
     // Hide loading overlay
     loadingOverlay.classList.add("hidden");
@@ -507,28 +616,50 @@ function preloadAndPlay() {
   if (isDisplayOff) return;
 
   const item = playlist[currentIndex];
+  trackPlayed(item);
   devLog(`Playing: ${item.name || "?"} (${item.type})`);
 
   if (item.type === "VIDEO") {
     playVideo(item);
+  } else if (item.type === "URL" || item.type === "HTML") {
+    playWebPage(item);
   } else {
     playImage(item);
   }
 }
 
 function playVideo(item) {
-  // Hide image
-  imageLayer.classList.add("hidden");
+  // Clear any leftover oncanplay from previous video load
+  activeVideo.oncanplay = null;
+  nextVideo.oncanplay = null;
 
   const url = getMediaUrl(item);
 
-  // Setup active video
+  // Setup active video — keep hidden until first frame ready (avoids play-button flash)
   activeVideo.src = url;
   activeVideo.currentTime = 0;
   activeVideo.muted = audioMuted;
   activeVideo.volume = audioVolume / 100;
-  activeVideo.classList.remove("hidden");
+  activeVideo.classList.add("hidden");
   activeVideo.style.zIndex = 10;
+
+  let videoShown = false;
+  const showVideo = () => {
+    if (videoShown) return;
+    videoShown = true;
+    clearTimeout(skipTimer);
+    // Hide previous layer only when new video is ready — no black flash
+    imageLayer.classList.add("hidden");
+    nextVideo.classList.add("hidden");
+    activeVideo.classList.remove("hidden");
+    activeVideo.style.opacity = '1';
+    activeVideo.oncanplay = null;
+    activeVideo.onplaying = null;
+  };
+  activeVideo.oncanplay = showVideo;
+  activeVideo.onplaying = showVideo;
+  // If already buffered (preloaded), canplay won't fire again — check readyState
+  if (activeVideo.readyState >= 3) showVideo();
 
   // Preload next
   preloadNext();
@@ -540,25 +671,46 @@ function playVideo(item) {
     activeVideo.play().catch(() => {});
   });
 
-  // Use item duration or video end
   const duration = (item.duration || 30) * 1000;
 
-  activeVideo.onended = () => { advanceToNext(); };
+  // If video doesn't start in 5s (file missing / network issue) → skip
+  const skipTimer = setTimeout(() => {
+    if (!videoShown) {
+      activeVideo.oncanplay = null;
+      activeVideo.onplaying = null;
+      activeVideo.onended = null;
+      activeVideo.onerror = null;
+      activeVideo.classList.add("hidden");
+      clearTimeout(itemTimer);
+      advanceToNext();
+    }
+  }, 5000);
+
+  activeVideo.onended = () => {
+    clearTimeout(skipTimer);
+    clearTimeout(itemTimer);
+    advanceToNext();
+  };
   activeVideo.onerror = () => {
     console.warn("[Video] Error playing:", item.name);
+    clearTimeout(skipTimer);
+    activeVideo.classList.add("hidden");
     clearTimeout(itemTimer);
-    itemTimer = setTimeout(advanceToNext, 3000);
+    itemTimer = setTimeout(advanceToNext, 1000);
   };
 
-  // Fallback timer (in case onended doesn't fire)
   clearTimeout(itemTimer);
   itemTimer = setTimeout(() => {
+    clearTimeout(skipTimer);
     activeVideo.pause();
     advanceToNext();
   }, duration + 2000);
 }
 
 function playImage(item) {
+  // Clear any leftover oncanplay callbacks — prevent ghost video appearing over image
+  activeVideo.oncanplay = null;
+  nextVideo.oncanplay = null;
   // Hide videos
   activeVideo.classList.add("hidden");
   nextVideo.classList.add("hidden");
@@ -574,8 +726,27 @@ function playImage(item) {
   // Preload next
   preloadNext();
 
-  const duration = (item.duration || 10) * 1000;
   clearTimeout(itemTimer);
+  if (playlist.length > 1) {
+    const duration = (item.duration || 10) * 1000;
+    itemTimer = setTimeout(advanceToNext, duration);
+  }
+  // Single image: stay on screen indefinitely (no timer)
+}
+
+function playWebPage(item) {
+  activeVideo.classList.add("hidden");
+  nextVideo.classList.add("hidden");
+  activeVideo.pause();
+  nextVideo.pause();
+  imageLayer.classList.add("hidden");
+
+  webLayer.src = item.url;
+  webLayer.classList.remove("hidden");
+  webLayer.style.zIndex = 10;
+
+  clearTimeout(itemTimer);
+  const duration = (item.duration || 30) * 1000;
   itemTimer = setTimeout(advanceToNext, duration);
 }
 
@@ -597,6 +768,8 @@ function preloadNext() {
 
 function advanceToNext() {
   clearTimeout(itemTimer);
+  webLayer.classList.add("hidden");
+  webLayer.src = "about:blank";
 
   // Swap video buffers
   const tmp = activeVideo;
@@ -606,7 +779,17 @@ function advanceToNext() {
   nextVideo.style.zIndex = 1;
   nextVideo.pause();
 
-  currentIndex = (currentIndex + 1) % playlist.length;
+  const next = (currentIndex + 1) % playlist.length;
+  if (next === 0) {
+    const active = getActiveSchedule();
+    if (active && active.shuffle) {
+      const reshuffled = applyShuffleToSchedule(active);
+      const idx = schedules.findIndex(s => s.id === active.id);
+      if (idx !== -1) schedules[idx] = reshuffled;
+      playlist = reshuffled.items;
+    }
+  }
+  currentIndex = next;
   preloadAndPlay();
 }
 
@@ -617,6 +800,8 @@ function stopPlayback() {
   activeVideo.classList.add("hidden");
   nextVideo.classList.add("hidden");
   imageLayer.classList.add("hidden");
+  webLayer.classList.add("hidden");
+  webLayer.src = "about:blank";
 }
 
 // ============================================================
@@ -697,10 +882,15 @@ function checkDisplaySchedule() {
 // DISPLAY SETTINGS
 // ============================================================
 function applyDisplaySettings(settings) {
+  displaySettings = settings;
   const fit = settings.objectFit || "cover";
   [videoA, videoB, imageLayer, ssImage, ssVideo].forEach((el) => {
     if (el) el.style.objectFit = fit;
   });
+  // Orientation — Android native rotation
+  if (isAndroid && settings.orientation) {
+    try { AndroidBridge.setOrientation(settings.orientation); } catch (e) {}
+  }
 }
 
 // ============================================================
@@ -1014,6 +1204,7 @@ function doLogout() {
       displaySchedule = state.displaySchedule || null;
       audioVolume = state.audioVolume ?? 100;
       audioMuted = state.audioMuted ?? false;
+      if (state.displaySettings) applyDisplaySettings(state.displaySettings);
     }
 
     await doReconnect(deviceToken);
