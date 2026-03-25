@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.airmyplay.player.app-mergeReleaseResources-18:/values-v28/values-v28.xml",
+            "outputFile": "com.airmyplay.player.app-mergeReleaseResources-23:/values-v28/values-v28.xml",
             "map": [
                 {
                     "source": "C:\\Users\\Huseynov PC\\.gradle\\caches\\transforms-3\\42349fcab7a5a6a21b6eefeb34a9888a\\transformed\\appcompat-1.6.1\\res\\values-v28\\values-v28.xml",

@@ -33,6 +33,8 @@ let devToolsOpen = false;
 let devLogs = [];
 let bandwidthConfig = null; // [{startTime, endTime, maxMBps}]
 let recentlyPlayedIds = []; // for shuffle no-repeat tracking
+let cinemaAlertConfig = null;
+let cinemaAlertTimers = [];
 let cacheAbortFlag = false; // yeni playlist gələndə köhnə cache-i dayandır
 
 // ---- DOM ----
@@ -327,6 +329,7 @@ function enterPlayer() {
   loadPlaylist();
   startPolling();
   startClockUpdate();
+  fetchCinemaAlertConfig();
 }
 
 // ============================================================
@@ -390,6 +393,22 @@ function connectSocket() {
     doLogout();
   });
 
+  socket.on("force_screensaver", (data) => {
+    console.log("[WS] force_screensaver:", data?.reason);
+    stopPlayback();
+    showScreensaver();
+  });
+
+  socket.on("emergency_alert", (data) => {
+    console.log("[WS] TƏCILI MESAJ:", data.message);
+    showEmergencyAlert(data);
+  });
+
+  socket.on("emergency_alert_dismiss", () => {
+    console.log("[WS] Təcili mesaj ləğv edildi");
+    hideEmergencyAlert();
+  });
+
   socket.on("screensaver_update", (data) => {
     screensaverUrl = data.url || null;
     // Cache screensaver if on Android
@@ -448,6 +467,226 @@ function connectSocket() {
       try { AndroidBridge.setBandwidthConfig(JSON.stringify(config || [])); } catch (e) {}
     }
   });
+
+  socket.on("cinema_alert_config", (config) => {
+    devLog("[WS] cinema_alert_config: " + (config ? config.cinemaName : "silindi"));
+    cinemaAlertConfig = config || null;
+    scheduleCinemaAlerts();
+  });
+}
+
+// ============================================================
+// CINEMA ALERT
+// ============================================================
+async function fetchCinemaAlertConfig() {
+  if (!monitorInfo) return;
+  try {
+    const res = await fetch(`${API_BASE}/cinema-alerts/monitor/${monitorInfo.id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    cinemaAlertConfig = data || null;
+    scheduleCinemaAlerts();
+    devLog("Cinema alert config: " + (data ? data.cinemaName : "yox"));
+  } catch (e) {
+    devLog("Cinema alert config alınmadı: " + e.message);
+  }
+}
+
+async function scheduleCinemaAlerts() {
+  cinemaAlertTimers.forEach(t => clearTimeout(t));
+  cinemaAlertTimers = [];
+  hideCinemaAlertOverlay();
+  if (!cinemaAlertConfig) return;
+
+  try {
+    const res = await fetch(cinemaAlertConfig.apiUrl);
+    const text = await res.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, "text/xml");
+    const movies = xml.querySelectorAll("movie");
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const sessions = [];
+
+    movies.forEach(movie => {
+      const title = movie.querySelector("title")?.textContent?.trim() || "";
+      movie.querySelectorAll("hall").forEach(hall => {
+        const hallName = hall.getAttribute("name") || "";
+        hall.querySelectorAll("session").forEach(s => {
+          const timeRaw = s.textContent?.trim() || "";
+          const isDatetime = timeRaw.length >= 16;
+          const sessionDate = isDatetime ? timeRaw.substring(0, 10) : today;
+          if (sessionDate !== today) return;
+          const timeStr = isDatetime ? timeRaw.substring(11, 16) : timeRaw;
+          const parts = timeStr.split(":");
+          if (parts.length < 2) return;
+          const h = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10);
+          if (isNaN(h) || isNaN(m)) return;
+          const sessionTime = new Date(now);
+          sessionTime.setHours(h, m, 0, 0);
+          const alertTime = new Date(sessionTime.getTime() - cinemaAlertConfig.minutesBefore * 60000);
+          const delay = alertTime.getTime() - Date.now();
+          if (delay > -10000) {
+            sessions.push({ time: timeStr, title, hall: hallName, type: s.getAttribute("type") || "2D", lang: s.getAttribute("language") || "", alertTime });
+          }
+        });
+      });
+    });
+
+    devLog("Cinema alert: " + sessions.length + " seans planlandı");
+    sessions.forEach(sess => {
+      const delay = Math.max(0, sess.alertTime.getTime() - Date.now());
+      const t = setTimeout(() => showCinemaAlertOverlay(sess), delay);
+      cinemaAlertTimers.push(t);
+    });
+  } catch (e) {
+    devLog("Cinema alert XML alınmadı: " + e.message);
+  }
+}
+
+function showEmergencyAlert(data) {
+  hideEmergencyAlert();
+  const overlay = document.createElement("div");
+  overlay.id = "emergency-alert-overlay";
+  overlay.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;background:${data.color || '#dc2626'};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;`;
+  overlay.innerHTML = `
+    <div style="font-size:80px;margin-bottom:30px;">⚠️</div>
+    <div style="font-size:48px;font-weight:bold;line-height:1.3;max-width:80%;text-shadow:0 2px 10px rgba(0,0,0,0.3);">${data.message}</div>
+  `;
+  document.body.appendChild(overlay);
+  if (data.duration && data.duration > 0) {
+    setTimeout(() => hideEmergencyAlert(), data.duration * 1000);
+  }
+}
+
+function hideEmergencyAlert() {
+  const el = document.getElementById("emergency-alert-overlay");
+  if (el) el.remove();
+}
+
+function showCinemaAlertOverlay(session) {
+  hideCinemaAlertOverlay();
+  const cfg = cinemaAlertConfig;
+  if (!cfg) return;
+
+  const fields = cfg.showFields || {};
+  const color = cfg.color || "#e50914";
+
+  if (!document.getElementById("cinema-alert-styles")) {
+    const style = document.createElement("style");
+    style.id = "cinema-alert-styles";
+    style.textContent = `
+      @keyframes caIn  { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+      @keyframes caOut { from { opacity:1; transform:scale(1); }  to { opacity:0; transform:scale(1.04); } }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "cinema-alert-overlay";
+  overlay.style.cssText =
+    "position:fixed;top:0;left:0;width:100%;height:100%;z-index:199999;" +
+    "background:linear-gradient(160deg,#0d0d1a 0%,#1a0535 50%,#0d0d1a 100%);" +
+    "display:flex;flex-direction:column;align-items:center;justify-content:center;" +
+    "color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;" +
+    "animation:caIn 0.5s ease;";
+
+  const accentTop = document.createElement("div");
+  accentTop.style.cssText = `position:absolute;top:0;left:0;right:0;height:5px;background:${color};`;
+  overlay.appendChild(accentTop);
+
+  if (cfg.cinemaName) {
+    const nameEl = document.createElement("div");
+    nameEl.style.cssText =
+      "position:absolute;top:28px;left:0;right:0;text-align:center;" +
+      "font-size:14px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,0.4);";
+    nameEl.textContent = cfg.cinemaName;
+    overlay.appendChild(nameEl);
+  }
+
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;";
+
+  if (fields.movie && session.title) {
+    const t = document.createElement("div");
+    t.style.cssText =
+      "font-size:clamp(22px,3.5vw,52px);font-weight:900;letter-spacing:2px;" +
+      "margin-bottom:4px;text-shadow:0 2px 20px rgba(0,0,0,0.5);max-width:90vw;";
+    t.textContent = session.title;
+    wrap.appendChild(t);
+  }
+
+  if (fields.time && session.time) {
+    const t = document.createElement("div");
+    t.style.cssText =
+      `font-size:clamp(48px,10vw,140px);font-weight:900;letter-spacing:8px;color:${color};` +
+      "font-variant-numeric:tabular-nums;line-height:1;margin:8px 0;";
+    t.textContent = session.time;
+    wrap.appendChild(t);
+  }
+
+  const badges = document.createElement("div");
+  badges.style.cssText = "display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:12px;";
+
+  if (fields.format && session.type) {
+    const fmtColor = session.type.toUpperCase().includes("IMAX") ? "#ffb300"
+      : session.type.toUpperCase().includes("3D") ? "#ff5c5c" : "#00d4ff";
+    const b = document.createElement("span");
+    b.style.cssText =
+      `padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);` +
+      `border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:800;color:${fmtColor};`;
+    b.textContent = session.type;
+    badges.appendChild(b);
+  }
+
+  if (fields.hall && session.hall) {
+    const b = document.createElement("span");
+    b.style.cssText =
+      "padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);" +
+      "border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:700;";
+    b.textContent = session.hall;
+    badges.appendChild(b);
+  }
+
+  if (fields.lang && session.lang) {
+    const b = document.createElement("span");
+    b.style.cssText =
+      "padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);" +
+      "border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:700;color:rgba(255,255,255,0.75);";
+    b.textContent = session.lang;
+    badges.appendChild(b);
+  }
+
+  if (badges.children.length > 0) wrap.appendChild(badges);
+  overlay.appendChild(wrap);
+
+  const barWrap = document.createElement("div");
+  barWrap.style.cssText = "position:absolute;bottom:0;left:0;right:0;height:4px;background:rgba(255,255,255,0.1);";
+  const bar = document.createElement("div");
+  bar.style.cssText = `height:100%;background:${color};width:100%;`;
+  barWrap.appendChild(bar);
+  overlay.appendChild(barWrap);
+
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => {
+    bar.style.transition = `width ${cfg.displaySeconds}s linear`;
+    bar.style.width = "0%";
+  });
+
+  const hideTimer = setTimeout(() => {
+    overlay.style.animation = "caOut 0.5s ease forwards";
+    setTimeout(() => hideCinemaAlertOverlay(), 500);
+  }, cfg.displaySeconds * 1000);
+  cinemaAlertTimers.push(hideTimer);
+
+  devLog("Cinema alert göstərildi: " + session.title + " — " + session.time);
+}
+
+function hideCinemaAlertOverlay() {
+  const el = document.getElementById("cinema-alert-overlay");
+  if (el) el.remove();
 }
 
 // ============================================================
@@ -629,6 +868,28 @@ function preloadAndPlay() {
 }
 
 function playVideo(item) {
+  // Use native ExoPlayer if available (Android)
+  if (window.AndroidBridge && typeof AndroidBridge.playNativeVideo === 'function') {
+    // ExoPlayer needs real file path (not airmyplay-cache.local which only WebView intercepts)
+    var url = item.url;
+    if (typeof AndroidBridge.getCachedFilePath === 'function') {
+      var filePath = AndroidBridge.getCachedFilePath(item.url);
+      if (filePath) url = filePath;
+    }
+    AndroidBridge.playNativeVideo(url, audioVolume, audioMuted);
+
+    // Set timer for duration-based advancement
+    clearTimeout(itemTimer);
+    var duration = (item.duration || 30) * 1000;
+    itemTimer = setTimeout(function() {
+      AndroidBridge.stopNativeVideo();
+      advanceToNext();
+    }, duration + 2000);
+
+    return; // Don't use WebView video
+  }
+
+  // Fallback: WebView video
   // Clear any leftover oncanplay from previous video load
   activeVideo.oncanplay = null;
   nextVideo.oncanplay = null;
@@ -708,6 +969,10 @@ function playVideo(item) {
 }
 
 function playImage(item) {
+  // Stop native video if it was playing
+  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
+    AndroidBridge.stopNativeVideo();
+  }
   // Clear any leftover oncanplay callbacks — prevent ghost video appearing over image
   activeVideo.oncanplay = null;
   nextVideo.oncanplay = null;
@@ -735,6 +1000,10 @@ function playImage(item) {
 }
 
 function playWebPage(item) {
+  // Stop native video if it was playing
+  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
+    AndroidBridge.stopNativeVideo();
+  }
   activeVideo.classList.add("hidden");
   nextVideo.classList.add("hidden");
   activeVideo.pause();
@@ -768,6 +1037,23 @@ function preloadNext() {
 
 function advanceToNext() {
   clearTimeout(itemTimer);
+
+  // Log play to analytics
+  const finishedItem = (currentIndex >= 0 && playlist.length > 0) ? playlist[currentIndex] : null;
+  if (finishedItem && monitorInfo) {
+    fetch(API_BASE + '/analytics/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        monitorId: monitorInfo.id,
+        mediaId: finishedItem.mediaId || finishedItem.id,
+        mediaName: finishedItem.name || finishedItem.title || 'Unknown',
+        mediaType: finishedItem.type || 'IMAGE',
+        durationMs: finishedItem.duration ? finishedItem.duration * 1000 : 10000,
+      }),
+    }).catch(() => {});
+  }
+
   webLayer.classList.add("hidden");
   webLayer.src = "about:blank";
 
@@ -808,6 +1094,10 @@ function stopPlayback() {
 // SCREENSAVER
 // ============================================================
 function showScreensaver() {
+  // Stop native video if it was playing
+  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
+    AndroidBridge.stopNativeVideo();
+  }
   isScreensaver = true;
   stopPlayback();
   screensaverEl.classList.remove("hidden");
@@ -901,7 +1191,27 @@ function applyAudio() {
     v.volume = audioVolume / 100;
     v.muted = audioMuted;
   });
+  // Sync volume to native ExoPlayer if active
+  if (window.AndroidBridge && typeof AndroidBridge.setNativeVideoVolume === 'function') {
+    AndroidBridge.setNativeVideoVolume(audioVolume, audioMuted);
+  }
 }
+
+// Native video ended callback (called from Kotlin ExoPlayer)
+window.onNativeVideoEnded = function() {
+  clearTimeout(itemTimer);
+  advanceToNext();
+};
+
+// Native video error callback (called from Kotlin ExoPlayer)
+window.onNativeVideoError = function() {
+  clearTimeout(itemTimer);
+  if (playlist.length > 1) {
+    advanceToNext();
+  } else {
+    showScreensaver();
+  }
+};
 
 // ============================================================
 // HEARTBEAT

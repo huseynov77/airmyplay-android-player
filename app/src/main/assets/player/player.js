@@ -393,6 +393,22 @@ function connectSocket() {
     doLogout();
   });
 
+  socket.on("force_screensaver", (data) => {
+    console.log("[WS] force_screensaver:", data?.reason);
+    stopPlayback();
+    showScreensaver();
+  });
+
+  socket.on("emergency_alert", (data) => {
+    console.log("[WS] TƏCILI MESAJ:", data.message);
+    showEmergencyAlert(data);
+  });
+
+  socket.on("emergency_alert_dismiss", () => {
+    console.log("[WS] Təcili mesaj ləğv edildi");
+    hideEmergencyAlert();
+  });
+
   socket.on("screensaver_update", (data) => {
     screensaverUrl = data.url || null;
     // Cache screensaver if on Android
@@ -527,6 +543,26 @@ async function scheduleCinemaAlerts() {
   } catch (e) {
     devLog("Cinema alert XML alınmadı: " + e.message);
   }
+}
+
+function showEmergencyAlert(data) {
+  hideEmergencyAlert();
+  const overlay = document.createElement("div");
+  overlay.id = "emergency-alert-overlay";
+  overlay.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;background:${data.color || '#dc2626'};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;`;
+  overlay.innerHTML = `
+    <div style="font-size:80px;margin-bottom:30px;">⚠️</div>
+    <div style="font-size:48px;font-weight:bold;line-height:1.3;max-width:80%;text-shadow:0 2px 10px rgba(0,0,0,0.3);">${data.message}</div>
+  `;
+  document.body.appendChild(overlay);
+  if (data.duration && data.duration > 0) {
+    setTimeout(() => hideEmergencyAlert(), data.duration * 1000);
+  }
+}
+
+function hideEmergencyAlert() {
+  const el = document.getElementById("emergency-alert-overlay");
+  if (el) el.remove();
 }
 
 function showCinemaAlertOverlay(session) {
@@ -832,6 +868,28 @@ function preloadAndPlay() {
 }
 
 function playVideo(item) {
+  // Use native ExoPlayer if available (Android)
+  if (window.AndroidBridge && typeof AndroidBridge.playNativeVideo === 'function') {
+    // ExoPlayer needs real file path (not airmyplay-cache.local which only WebView intercepts)
+    var url = item.url;
+    if (typeof AndroidBridge.getCachedFilePath === 'function') {
+      var filePath = AndroidBridge.getCachedFilePath(item.url);
+      if (filePath) url = filePath;
+    }
+    AndroidBridge.playNativeVideo(url, audioVolume, audioMuted);
+
+    // Set timer for duration-based advancement
+    clearTimeout(itemTimer);
+    var duration = (item.duration || 30) * 1000;
+    itemTimer = setTimeout(function() {
+      AndroidBridge.stopNativeVideo();
+      advanceToNext();
+    }, duration + 2000);
+
+    return; // Don't use WebView video
+  }
+
+  // Fallback: WebView video
   // Clear any leftover oncanplay from previous video load
   activeVideo.oncanplay = null;
   nextVideo.oncanplay = null;
@@ -911,6 +969,10 @@ function playVideo(item) {
 }
 
 function playImage(item) {
+  // Stop native video if it was playing
+  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
+    AndroidBridge.stopNativeVideo();
+  }
   // Clear any leftover oncanplay callbacks — prevent ghost video appearing over image
   activeVideo.oncanplay = null;
   nextVideo.oncanplay = null;
@@ -938,6 +1000,10 @@ function playImage(item) {
 }
 
 function playWebPage(item) {
+  // Stop native video if it was playing
+  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
+    AndroidBridge.stopNativeVideo();
+  }
   activeVideo.classList.add("hidden");
   nextVideo.classList.add("hidden");
   activeVideo.pause();
@@ -971,6 +1037,23 @@ function preloadNext() {
 
 function advanceToNext() {
   clearTimeout(itemTimer);
+
+  // Log play to analytics
+  const finishedItem = (currentIndex >= 0 && playlist.length > 0) ? playlist[currentIndex] : null;
+  if (finishedItem && monitorInfo) {
+    fetch(API_BASE + '/analytics/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        monitorId: monitorInfo.id,
+        mediaId: finishedItem.mediaId || finishedItem.id,
+        mediaName: finishedItem.name || finishedItem.title || 'Unknown',
+        mediaType: finishedItem.type || 'IMAGE',
+        durationMs: finishedItem.duration ? finishedItem.duration * 1000 : 10000,
+      }),
+    }).catch(() => {});
+  }
+
   webLayer.classList.add("hidden");
   webLayer.src = "about:blank";
 
@@ -1011,6 +1094,10 @@ function stopPlayback() {
 // SCREENSAVER
 // ============================================================
 function showScreensaver() {
+  // Stop native video if it was playing
+  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
+    AndroidBridge.stopNativeVideo();
+  }
   isScreensaver = true;
   stopPlayback();
   screensaverEl.classList.remove("hidden");
@@ -1104,7 +1191,27 @@ function applyAudio() {
     v.volume = audioVolume / 100;
     v.muted = audioMuted;
   });
+  // Sync volume to native ExoPlayer if active
+  if (window.AndroidBridge && typeof AndroidBridge.setNativeVideoVolume === 'function') {
+    AndroidBridge.setNativeVideoVolume(audioVolume, audioMuted);
+  }
 }
+
+// Native video ended callback (called from Kotlin ExoPlayer)
+window.onNativeVideoEnded = function() {
+  clearTimeout(itemTimer);
+  advanceToNext();
+};
+
+// Native video error callback (called from Kotlin ExoPlayer)
+window.onNativeVideoError = function() {
+  clearTimeout(itemTimer);
+  if (playlist.length > 1) {
+    advanceToNext();
+  } else {
+    showScreensaver();
+  }
+};
 
 // ============================================================
 // HEARTBEAT

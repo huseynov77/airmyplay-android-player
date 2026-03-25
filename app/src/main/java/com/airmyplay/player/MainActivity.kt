@@ -12,7 +12,13 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.*
+import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -24,6 +30,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var mediaCacheDir: File
+    private lateinit var playerView: PlayerView
+    private var exoPlayer: ExoPlayer? = null
+    private lateinit var container: FrameLayout
     // Bandwidth throttle: list of {startTime, endTime, maxMBps} rules
     private var bandwidthRules: List<Map<String, Any>> = emptyList()
 
@@ -123,7 +132,25 @@ class MainActivity : AppCompatActivity() {
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
         }
 
-        setContentView(webView)
+        playerView = PlayerView(this).apply {
+            useController = false
+            visibility = View.GONE
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        container = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            addView(webView)
+            addView(playerView)
+        }
+
+        setContentView(container)
 
         // Load HTML content directly — sub-resources fetched via shouldInterceptRequest
         try {
@@ -316,6 +343,88 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        @JavascriptInterface
+        fun getCachedFilePath(url: String): String {
+            try {
+                val fileName = md5(url) + getExtension(url)
+                val file = File(mediaCacheDir, fileName)
+                if (file.exists() && file.length() > 0) {
+                    return file.absolutePath
+                }
+            } catch (_: Exception) {}
+            return ""
+        }
+
+        @JavascriptInterface
+        fun playNativeVideo(url: String, volume: Float, muted: Boolean) {
+            runOnUiThread {
+                try {
+                    exoPlayer?.release()
+
+                    exoPlayer = ExoPlayer.Builder(this@MainActivity).build().also { player ->
+                        playerView.player = player
+                        val mediaItem = MediaItem.fromUri(url)
+                        player.setMediaItem(mediaItem)
+                        player.volume = if (muted) 0f else volume / 100f
+                        player.playWhenReady = true
+                        player.prepare()
+
+                        player.addListener(object : Player.Listener {
+                            override fun onPlaybackStateChanged(playbackState: Int) {
+                                if (playbackState == Player.STATE_ENDED) {
+                                    runOnUiThread {
+                                        webView.evaluateJavascript("if(typeof onNativeVideoEnded==='function')onNativeVideoEnded()", null)
+                                    }
+                                }
+                            }
+                            override fun onPlayerError(error: PlaybackException) {
+                                android.util.Log.e("Airmyplay", "ExoPlayer error: ${error.message}")
+                                runOnUiThread {
+                                    playerView.visibility = View.GONE
+                                    webView.visibility = View.VISIBLE
+                                    webView.evaluateJavascript("if(typeof onNativeVideoError==='function')onNativeVideoError()", null)
+                                }
+                            }
+                        })
+
+                        playerView.visibility = View.VISIBLE
+                        webView.visibility = View.GONE
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("Airmyplay", "ExoPlayer error: ${e.message}")
+                    playerView.visibility = View.GONE
+                    webView.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun stopNativeVideo() {
+            runOnUiThread {
+                try {
+                    exoPlayer?.stop()
+                    exoPlayer?.release()
+                    exoPlayer = null
+                    playerView.visibility = View.GONE
+                    webView.visibility = View.VISIBLE
+                } catch (e: Exception) {
+                    android.util.Log.e("Airmyplay", "Stop video error: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun setNativeVideoVolume(volume: Float, muted: Boolean) {
+            runOnUiThread {
+                exoPlayer?.volume = if (muted) 0f else volume / 100f
+            }
+        }
+
+        @JavascriptInterface
+        fun isNativeVideoPlaying(): Boolean {
+            return exoPlayer?.isPlaying == true
+        }
+
         private fun md5(input: String): String {
             return MessageDigest.getInstance("MD5").digest(input.toByteArray()).joinToString("") { "%02x".format(it) }
         }
@@ -377,16 +486,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        try { exoPlayer?.play() } catch (_: Exception) {}
         try { webView.onResume() } catch (_: Exception) {}
         try { enterImmersiveMode() } catch (_: Exception) {}
     }
 
     override fun onPause() {
         super.onPause()
+        try { exoPlayer?.pause() } catch (_: Exception) {}
         try { webView.onPause() } catch (_: Exception) {}
     }
 
     override fun onDestroy() {
+        try { exoPlayer?.release() } catch (_: Exception) {}
         try { wakeLock?.release() } catch (_: Exception) {}
         try { webView.destroy() } catch (_: Exception) {}
         super.onDestroy()

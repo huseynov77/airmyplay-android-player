@@ -234,9 +234,9 @@
       externalAnnotations="annotations.zip"
       proguardRules="proguard.txt"/>
   <library
-      name="androidx.collection:collection:1.1.0@jar"
-      jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\androidx.collection\collection\1.1.0\1f27220b47669781457de0d600849a5de0e89909\collection-1.1.0.jar"
-      resolved="androidx.collection:collection:1.1.0"/>
+      name="androidx.collection:collection:1.2.0@jar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\androidx.collection\collection\1.2.0\34dbc21d203cc4d4d623ac572a21acd4ccd716af\collection-1.2.0.jar"
+      resolved="androidx.collection:collection:1.2.0"/>
   <library
       name="androidx.lifecycle:lifecycle-livedata:2.0.0@aar"
       jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\2b8ec26b91b1b99804b4876e1df907e0\transformed\lifecycle-livedata-2.0.0\jars\classes.jar"
@@ -302,10 +302,36 @@
       jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\androidx.annotation\annotation-jvm\1.6.0\a7257339a052df0f91433cf9651231bbb802b502\annotation-jvm-1.6.0.jar"
       resolved="androidx.annotation:annotation-jvm:1.6.0"/>
   <library
-      name="androidx.annotation:annotation-experimental:1.3.0@aar"
-      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\8ef1b8ff2858effc16228738e0cf3094\transformed\annotation-experimental-1.3.0\jars\classes.jar"
-      resolved="androidx.annotation:annotation-experimental:1.3.0"
-      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\8ef1b8ff2858effc16228738e0cf3094\transformed\annotation-experimental-1.3.0"
+      name="androidx.media3:media3-exoplayer:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\38569ba5495de99da4d16a4c2bd71bda\transformed\media3-exoplayer-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-exoplayer:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\38569ba5495de99da4d16a4c2bd71bda\transformed\media3-exoplayer-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.media3:media3-common:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\39a5c20d6f00810adcb2f7ee4d99be20\transformed\media3-common-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-common:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\39a5c20d6f00810adcb2f7ee4d99be20\transformed\media3-common-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.annotation:annotation-experimental:1.3.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\5438b358ac2f0695492a3ec16ca3ed12\transformed\annotation-experimental-1.3.1\jars\classes.jar"
+      resolved="androidx.annotation:annotation-experimental:1.3.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\5438b358ac2f0695492a3ec16ca3ed12\transformed\annotation-experimental-1.3.1"
       manifest="AndroidManifest.xml"
       resFolder="res"
       assetsFolder="assets"
@@ -335,9 +361,99 @@
       jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\org.jetbrains.kotlin\kotlin-stdlib\1.9.22\d6c44cd08d8f3f9bece8101216dbe6553365c6e3\kotlin-stdlib-1.9.22.jar"
       resolved="org.jetbrains.kotlin:kotlin-stdlib:1.9.22"/>
   <library
+      name="androidx.media3:media3-ui:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\7790a1fa12bb5ff365d9bf8bf7ced20f\transformed\media3-ui-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-ui:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\7790a1fa12bb5ff365d9bf8bf7ced20f\transformed\media3-ui-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
       name="org.jetbrains:annotations:13.0@jar"
       jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\org.jetbrains\annotations\13.0\919f0dfe192fb4e063e7dacadee7f8bb9a2672a9\annotations-13.0.jar"
       resolved="org.jetbrains:annotations:13.0"/>
+  <library
+      name="com.google.guava:guava:31.1-android@jar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\com.google.guava\guava\31.1-android\9222c47cc3ae890f07f7c961bbb3cb69050fe4aa\guava-31.1-android.jar"
+      resolved="com.google.guava:guava:31.1-android"/>
+  <library
+      name="com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava@jar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\com.google.guava\listenablefuture\9999.0-empty-to-avoid-conflict-with-guava\b421526c5f297295adef1c886e5246c39d4ac629\listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar"
+      resolved="com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"/>
+  <library
+      name="com.google.guava:failureaccess:1.0.1@jar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\com.google.guava\failureaccess\1.0.1\1dcf1de382a0bf95a3d8b0849546c88bac1292c9\failureaccess-1.0.1.jar"
+      resolved="com.google.guava:failureaccess:1.0.1"/>
+  <library
+      name="androidx.media3:media3-container:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\04e6d96a31de8ad6c450ed2f50498488\transformed\media3-container-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-container:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\04e6d96a31de8ad6c450ed2f50498488\transformed\media3-container-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.media3:media3-database:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\ab75d6962e6f56746cd59a496bd21006\transformed\media3-database-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-database:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\ab75d6962e6f56746cd59a496bd21006\transformed\media3-database-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.media3:media3-datasource:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\d89d34cd8813715b742327d3dcb6501e\transformed\media3-datasource-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-datasource:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\d89d34cd8813715b742327d3dcb6501e\transformed\media3-datasource-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.media3:media3-decoder:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\44392a5703a27247e0fc668c2867c8fa\transformed\media3-decoder-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-decoder:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\44392a5703a27247e0fc668c2867c8fa\transformed\media3-decoder-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.media3:media3-extractor:1.2.1@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\f72a167f069692f02b79cc0fd2a8cd0c\transformed\media3-extractor-1.2.1\jars\classes.jar"
+      resolved="androidx.media3:media3-extractor:1.2.1"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\f72a167f069692f02b79cc0fd2a8cd0c\transformed\media3-extractor-1.2.1"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
   <library
       name="androidx.emoji2:emoji2-views-helper:1.2.0@aar"
       jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\04898974e865d420b95f086e2f999ff2\transformed\emoji2-views-helper-1.2.0\jars\classes.jar"
@@ -365,6 +481,45 @@
       externalAnnotations="annotations.zip"
       proguardRules="proguard.txt"/>
   <library
+      name="androidx.media:media:1.6.0@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\fe02dc0ad4a1b52fefd146ef8ee31263\transformed\media-1.6.0\jars\classes.jar"
+      resolved="androidx.media:media:1.6.0"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\fe02dc0ad4a1b52fefd146ef8ee31263\transformed\media-1.6.0"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.recyclerview:recyclerview:1.3.0@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\c94be49077dde0cefc926e32bdd26abf\transformed\recyclerview-1.3.0\jars\classes.jar"
+      resolved="androidx.recyclerview:recyclerview:1.3.0"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\c94be49077dde0cefc926e32bdd26abf\transformed\recyclerview-1.3.0"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.customview:customview-poolingcontainer:1.0.0@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\58522d3f686609197c53f05f06d9104f\transformed\customview-poolingcontainer-1.0.0\jars\classes.jar"
+      resolved="androidx.customview:customview-poolingcontainer:1.0.0"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\58522d3f686609197c53f05f06d9104f\transformed\customview-poolingcontainer-1.0.0"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
       name="androidx.lifecycle:lifecycle-process:2.4.1@aar"
       jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\e31b4c49acd42e650810370e70a68f68\transformed\lifecycle-process-2.4.1\jars\classes.jar"
       resolved="androidx.lifecycle:lifecycle-process:2.4.1"
@@ -381,6 +536,19 @@
       name="androidx.resourceinspection:resourceinspection-annotation:1.0.1@jar"
       jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\androidx.resourceinspection\resourceinspection-annotation\1.0.1\8c21f8ff5d96d5d52c948707f7e4d6ca6773feef\resourceinspection-annotation-1.0.1.jar"
       resolved="androidx.resourceinspection:resourceinspection-annotation:1.0.1"/>
+  <library
+      name="androidx.exifinterface:exifinterface:1.3.6@aar"
+      jars="C:\Users\Huseynov PC\.gradle\caches\transforms-3\c0080d546a3a59f6f620959026c16997\transformed\exifinterface-1.3.6\jars\classes.jar"
+      resolved="androidx.exifinterface:exifinterface:1.3.6"
+      folder="C:\Users\Huseynov PC\.gradle\caches\transforms-3\c0080d546a3a59f6f620959026c16997\transformed\exifinterface-1.3.6"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
   <library
       name="androidx.concurrent:concurrent-futures:1.0.0@jar"
       jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\androidx.concurrent\concurrent-futures\1.0.0\c1e77e3ee6f4643b77496a1ddf7a2eef1aefdaa1\concurrent-futures-1.0.0.jar"
@@ -411,8 +579,4 @@
       symbolFile="R.txt"
       externalAnnotations="annotations.zip"
       proguardRules="proguard.txt"/>
-  <library
-      name="com.google.guava:listenablefuture:1.0@jar"
-      jars="C:\Users\Huseynov PC\.gradle\caches\modules-2\files-2.1\com.google.guava\listenablefuture\1.0\c949a840a6acbc5268d088e47b04177bf90b3cad\listenablefuture-1.0.jar"
-      resolved="com.google.guava:listenablefuture:1.0"/>
 </libraries>
