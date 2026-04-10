@@ -3,73 +3,73 @@
    Based on Web Player — adds Android bridge for local caching
    ============================================================ */
 
-const API_BASE = "https://backend-production-2fbb.up.railway.app/api/v1";
-const WS_BASE  = "https://backend-production-2fbb.up.railway.app";
+var API_BASE = "https://backend-production-2fbb.up.railway.app/api/v1";
+var WS_BASE  = "https://backend-production-2fbb.up.railway.app";
 
 // ---- Android Bridge Detection ----
-const isAndroid = !!(window.AndroidBridge);
+var isAndroid = !!(window.AndroidBridge);
 
 // ---- State ----
-let token = null;
-let monitorInfo = null;
-let socket = null;
-let playlist = [];
-let schedules = [];
-let currentIndex = 0;
-let itemTimer = null;
-let screensaverUrl = null;
-let displaySchedule = null;
-let displaySettings = null;
-let audioVolume = 100;
-let audioMuted = false;
-let isScreensaver = false;
-let isDisplayOff = false;
-let playlistPollInterval = null;
-let schedulePollInterval = null;
-let clockInterval = null;
-let hudTimeout = null;
-let mediaCache = {}; // url -> localPath mapping
-let devToolsOpen = false;
-let devLogs = [];
-let bandwidthConfig = null; // [{startTime, endTime, maxMBps}]
-let recentlyPlayedIds = []; // for shuffle no-repeat tracking
-let cinemaAlertConfig = null;
-let cinemaAlertTimers = [];
-let cacheAbortFlag = false; // yeni playlist gələndə köhnə cache-i dayandır
+var token = null;
+var monitorInfo = null;
+var socket = null;
+var playlist = [];
+var schedules = [];
+var currentIndex = 0;
+var itemTimer = null;
+var screensaverUrl = null;
+var displaySchedule = null;
+var displaySettings = null;
+var audioVolume = 100;
+var audioMuted = false;
+var isScreensaver = false;
+var isDisplayOff = false;
+var playlistPollInterval = null;
+var schedulePollInterval = null;
+var clockInterval = null;
+var hudTimeout = null;
+var mediaCache = {}; // url -> localPath mapping
+var devToolsOpen = false;
+var devLogs = [];
+var bandwidthConfig = null; // [{startTime, endTime, maxMBps}]
+var recentlyPlayedIds = []; // for shuffle no-repeat tracking
+var cinemaAlertConfig = null;
+var cinemaAlertTimers = [];
+var cacheAbortFlag = false; // yeni playlist gələndə köhnə cache-i dayandır
 
 // ---- DOM ----
-const $ = (id) => document.getElementById(id);
-const loginScreen   = $("login-screen");
-const playerScreen  = $("player-screen");
-const loginForm     = $("login-form");
-const inputCode     = $("input-code");
-const loginError    = $("login-error");
-const btnLogin      = $("btn-login");
-const videoA        = $("video-a");
-const videoB        = $("video-b");
-const imageLayer    = $("image-layer");
-const webLayer      = $("web-layer");
-const screensaverEl = $("screensaver");
-const ssVideo       = $("screensaver-video");
-const ssImage       = $("screensaver-image");
-const ssDefault     = $("screensaver-default");
-const ssClock       = $("ss-clock");
-const displayOff    = $("display-off");
-const loadingOverlay= $("loading-overlay");
-const loadingDetail = $("loading-detail");
-const deactivatedOverlay = $("deactivated-overlay");
-const deactivatedMsg     = $("deactivated-msg");
+var $ = function(id) { return document.getElementById(id); };
+var loginScreen   = $("login-screen");
+var playerScreen  = $("player-screen");
+var loginForm     = $("login-form");
+var inputCode     = $("input-code");
+var loginError    = $("login-error");
+var btnLogin      = $("btn-login");
+var videoA        = $("video-a");
+var videoB        = $("video-b");
+var imageLayer    = $("image-layer");
+var webLayer      = $("web-layer");
+var screensaverEl = $("screensaver");
+var ssVideo       = $("screensaver-video");
+var ssImage       = $("screensaver-image");
+var ssDefault     = $("screensaver-default");
+var ssClock       = $("ss-clock");
+var displayOff    = $("display-off");
+var loadingOverlay= $("loading-overlay");
+var loadingDetail = $("loading-detail");
+var deactivatedOverlay = $("deactivated-overlay");
+var deactivatedMsg     = $("deactivated-msg");
 
 // Active video (double-buffer)
-let activeVideo = videoA;
-let nextVideo = videoB;
+var activeVideo = videoA;
+var nextVideo = videoB;
 
 // ============================================================
 // MEDIA CACHING (Android Bridge)
 // ============================================================
 function getCachedUrl(url) {
   if (!isAndroid || !url) return url;
-  const cached = AndroidBridge.getCachedPath(url);
+  var cached = AndroidBridge.getCachedPath(url);
   if (cached && cached !== "") return cached;
   return url;
 }
@@ -77,11 +77,11 @@ function getCachedUrl(url) {
 async function cacheMediaFile(url) {
   if (!isAndroid || !url) return url;
 
-  const cached = AndroidBridge.getCachedPath(url);
+  var cached = AndroidBridge.getCachedPath(url);
   if (cached && cached !== "") return cached;
 
   try {
-    const localPath = AndroidBridge.downloadMedia(url);
+    var localPath = AndroidBridge.downloadMedia(url);
     if (localPath && localPath !== "") return localPath;
   } catch (e) {
     console.warn("[Cache] Download failed:", url, e);
@@ -93,14 +93,14 @@ async function cacheMediaFile(url) {
 async function cachePlaylistMedia(items) {
   if (!isAndroid || !items || items.length === 0) return;
 
-  for (let i = 0; i < items.length; i++) {
+  for (var i = 0; i < items.length; i++) {
     if (cacheAbortFlag) {
       devLog("INFO", "Cache dayandırıldı — yeni playlist gəldi");
       break;
     }
-    const item = items[i];
+    var item = items[i];
     try {
-      const localUrl = await cacheMediaFile(item.url);
+      var localUrl = await cacheMediaFile(item.url);
       if (localUrl !== item.url) {
         item.cachedUrl = localUrl;
       }
@@ -116,7 +116,7 @@ async function cachePlaylistMedia(items) {
 function getMediaUrl(item) {
   if (item.cachedUrl) return item.cachedUrl;
   if (isAndroid) {
-    const cached = getCachedUrl(item.url);
+    var cached = getCachedUrl(item.url);
     if (cached !== item.url) {
       item.cachedUrl = cached;
       return cached;
@@ -138,9 +138,9 @@ function getCacheStats() {
 // SHUFFLE
 // ============================================================
 function shuffleArray(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -148,21 +148,23 @@ function shuffleArray(arr) {
 
 function applyShuffleToSchedule(sched) {
   if (!sched.shuffle || !sched.items || sched.items.length <= 1) return sched;
-  let shuffled = shuffleArray(sched.items);
-  const noRepeat = sched.noRepeatCount || 0;
+  var shuffled = shuffleArray(sched.items);
+  var noRepeat = sched.noRepeatCount || 0;
   if (noRepeat > 0 && recentlyPlayedIds.length > 0) {
     // Move recently played items away from the start
-    const recent = new Set(recentlyPlayedIds.slice(-noRepeat));
-    const front = shuffled.filter(i => !recent.has(i.mediaId || i.id));
-    const back = shuffled.filter(i => recent.has(i.mediaId || i.id));
-    shuffled = [...front, ...back];
+    var recent = new Set(recentlyPlayedIds.slice(-noRepeat));
+    var front = shuffled.filter(function(i) { return !recent.has(i.mediaId || i.id); });
+    var back = shuffled.filter(function(i) { return recent.has(i.mediaId || i.id); });
+    shuffled = front.concat(back);
   }
-  return { ...sched, items: shuffled };
+  var result = Object.assign({}, sched);
+  result.items = shuffled;
+  return result;
 }
 
 function trackPlayed(item) {
   if (!item) return;
-  const id = item.mediaId || item.id;
+  var id = item.mediaId || item.id;
   if (!id) return;
   recentlyPlayedIds.push(id);
   if (recentlyPlayedIds.length > 50) recentlyPlayedIds.shift();
@@ -174,16 +176,16 @@ function trackPlayed(item) {
 function reportInventory() {
   if (!isAndroid || !socket || !monitorInfo) return;
   try {
-    const filesJson = AndroidBridge.listCacheFiles();
-    const files = typeof filesJson === "string" ? JSON.parse(filesJson) : filesJson;
+    var filesJson = AndroidBridge.listCacheFiles();
+    var files = typeof filesJson === "string" ? JSON.parse(filesJson) : filesJson;
     if (Array.isArray(files) && files.length > 0) {
       socket.emit("inventory_update", {
         monitorId: monitorInfo.id,
-        files: files.map(f => ({
+        files: files.map(function(f) { return {
           fileName: f.name || f.fileName,
           fileSize: parseFloat((f.size || f.fileSize || "0").toString()) || 0,
-          mediaId: f.mediaId || null,
-        })),
+          mediaId: f.mediaId || null
+        }; }),
       });
     }
   } catch (e) {
@@ -196,13 +198,13 @@ function reportInventory() {
 // ============================================================
 function isBandwidthThrottled() {
   if (!bandwidthConfig || !Array.isArray(bandwidthConfig) || bandwidthConfig.length === 0) return false;
-  const now = new Date();
-  const curMin = now.getHours() * 60 + now.getMinutes();
-  for (const rule of bandwidthConfig) {
-    const [sh, sm] = (rule.startTime || "00:00").split(":").map(Number);
-    const [eh, em] = (rule.endTime || "23:59").split(":").map(Number);
-    const start = sh * 60 + sm;
-    const end = eh * 60 + em;
+  var now = new Date();
+  var curMin = now.getHours() * 60 + now.getMinutes();
+  for (var rule of bandwidthConfig) {
+    var [sh, sm] = (rule.startTime || "00:00").split(":").map(Number);
+    var [eh, em] = (rule.endTime || "23:59").split(":").map(Number);
+    var start = sh * 60 + sm;
+    var end = eh * 60 + em;
     if (curMin >= start && curMin < end) return true;
   }
   return false;
@@ -233,13 +235,13 @@ function loadState() {
 // ============================================================
 // LOGIN
 // ============================================================
-loginForm.addEventListener("submit", async (e) => {
+loginForm.addEventListener("submit", async function(e) {
   e.preventDefault();
   await doPair(inputCode.value.trim().toUpperCase());
 });
 
 // Auto-uppercase pairing code
-inputCode.addEventListener("input", () => {
+inputCode.addEventListener("input", function() {
   inputCode.value = inputCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 });
 
@@ -250,18 +252,18 @@ async function doPair(pairingCode) {
   btnLogin.querySelector(".btn-loader").classList.remove("hidden");
 
   try {
-    const res = await fetch(`${API_BASE}/device/pair`, {
+    var res = await fetch(API_BASE + "/device/pair", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pairingCode }),
     });
 
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+      var data = await res.json().catch(function() { return {}; });
       throw new Error(data.message || "Kod yanlışdır və ya vaxtı keçib");
     }
 
-    const data = await res.json();
+    var data = await res.json();
     token = data.accessToken;
     monitorInfo = data.monitor;
     saveDeviceToken(data.deviceToken);
@@ -279,7 +281,7 @@ async function doPair(pairingCode) {
 
 async function doReconnect(deviceToken) {
   try {
-    const res = await fetch(`${API_BASE}/device/reconnect`, {
+    var res = await fetch(API_BASE + "/device/reconnect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ deviceToken }),
@@ -287,7 +289,7 @@ async function doReconnect(deviceToken) {
 
     if (!res.ok) {
       // If reconnect fails with network error, try offline mode with cached state
-      const state = loadState();
+      var state = loadState();
       if (state && state.monitorInfo) {
         devLog("Reconnect failed — entering offline mode with cached data");
         enterPlayer();
@@ -297,7 +299,7 @@ async function doReconnect(deviceToken) {
       return false;
     }
 
-    const data = await res.json();
+    var data = await res.json();
     token = data.accessToken;
     monitorInfo = data.monitor;
     saveState();
@@ -305,7 +307,7 @@ async function doReconnect(deviceToken) {
     return true;
   } catch {
     // Network error → offline mode
-    const state = loadState();
+    var state = loadState();
     if (state && state.monitorInfo) {
       devLog("Network error — entering offline mode with cached data");
       enterPlayer();
@@ -338,7 +340,7 @@ function enterPlayer() {
 function connectSocket() {
   if (socket) socket.disconnect();
 
-  socket = io(`${WS_BASE}/device`, {
+  socket = io(WS_BASE + "/device", {
     transports: ["websocket", "polling"],
     auth: { token },
     reconnection: true,
@@ -347,40 +349,40 @@ function connectSocket() {
     reconnectionDelayMax: 30000,
   });
 
-  socket.on("connect", () => {
+  socket.on("connect", function() {
     devLog("[WS] Connected");
     socket.emit("register", { monitorId: monitorInfo.id, token });
   });
 
-  socket.on("disconnect", (reason) => {
-    devLog(`[WS] Disconnected: ${reason}`);
+  socket.on("disconnect", function(reason) {
+    devLog("[WS] Disconnected: " + reason);
   });
 
-  socket.on("connect_error", (err) => {
-    devLog(`[WS] Connection error: ${err.message}`);
+  socket.on("connect_error", function(err) {
+    devLog("[WS] Connection error: " + err.message);
   });
 
-  socket.on("reconnect", () => {
+  socket.on("reconnect", function() {
     devLog("[WS] Reconnected — reloading playlist");
     socket.emit("register", { monitorId: monitorInfo.id, token });
     loadPlaylist();
   });
 
-  socket.on("playlist_update", () => {
+  socket.on("playlist_update", function() {
     devLog("[WS] playlist_update received");
     cacheAbortFlag = true; // köhnə cache-i dayandır
     loadPlaylist();
   });
 
-  socket.on("sync_playback", (data) => {
+  socket.on("sync_playback", function(data) {
     devLog("[WS] sync_playback received");
-    currentIndex = data?.startIndex || 0;
+    currentIndex = (data && data.startIndex) || 0;
     if (playlist.length > 0) {
       preloadAndPlay();
     }
   });
 
-  socket.on("audio_update", (data) => {
+  socket.on("audio_update", function(data) {
     console.log("[WS] audio_update", data);
     if (data.volume !== undefined) audioVolume = data.volume;
     if (data.muted !== undefined) audioMuted = data.muted;
@@ -388,67 +390,84 @@ function connectSocket() {
     saveState();
   });
 
-  socket.on("force_logout", () => {
+  socket.on("force_logout", function() {
     console.log("[WS] force_logout");
     doLogout();
   });
 
-  socket.on("force_screensaver", (data) => {
-    console.log("[WS] force_screensaver:", data?.reason);
+  socket.on("force_screensaver", function(data) {
+    console.log("[WS] force_screensaver:", (data && data.reason));
     stopPlayback();
     showScreensaver();
   });
 
-  socket.on("emergency_alert", (data) => {
+  socket.on("emergency_alert", function(data) {
     console.log("[WS] TƏCILI MESAJ:", data.message);
+    stopExoIfPlaying();
     showEmergencyAlert(data);
   });
 
-  socket.on("emergency_alert_dismiss", () => {
+  socket.on("emergency_alert_dismiss", function() {
     console.log("[WS] Təcili mesaj ləğv edildi");
     hideEmergencyAlert();
   });
 
-  socket.on("screensaver_update", (data) => {
+  socket.on("restart", function() {
+    console.log("[WS] restart");
+    location.reload();
+  });
+
+  socket.on("take_screenshot", function() {
+    console.log("[WS] take_screenshot");
+    if (window.AndroidBridge && typeof AndroidBridge.captureScreenshot === 'function') {
+      var base64 = AndroidBridge.captureScreenshot();
+      if (base64 && socket) {
+        socket.emit("screenshot_result", { image: base64 });
+        console.log("[Screenshot] Göndərildi:", base64.length, "bytes");
+      }
+    }
+  });
+
+  socket.on("screensaver_update", function(data) {
     screensaverUrl = data.url || null;
     // Cache screensaver if on Android
     if (isAndroid && screensaverUrl) {
-      cacheMediaFile(screensaverUrl).then(() => {});
+      cacheMediaFile(screensaverUrl).then(function() {});
     }
     saveState();
     if (isScreensaver) showScreensaver();
   });
 
-  socket.on("display_schedule_update", (data) => {
+  socket.on("display_schedule_update", function(data) {
     displaySchedule = data;
     saveState();
     checkDisplaySchedule();
   });
 
-  socket.on("display_settings_update", (data) => {
+  socket.on("display_settings_update", function(data) {
     devLog("[WS] display_settings_update");
     applyDisplaySettings(data);
   });
 
-  socket.on("monitor_update", (data) => {
+  socket.on("monitor_update", function(data) {
     if (data.name && monitorInfo) {
       monitorInfo.name = data.name;
       saveState();
-      devLog(`[WS] Monitor adı yeniləndi: ${data.name}`);
+      devLog("[WS] Monitor adı yeniləndi: " + data.name);
     }
   });
 
-  socket.on("force_deactivate", (data) => {
+  socket.on("force_deactivate", function(data) {
     deactivatedMsg.textContent = data.message || "";
     deactivatedOverlay.classList.remove("hidden");
   });
 
-  socket.on("venue_activated", () => {
+  socket.on("venue_activated", function() {
     deactivatedOverlay.classList.add("hidden");
     loadPlaylist();
   });
 
-  socket.on("clear_cache", () => {
+  socket.on("clear_cache", function() {
     devLog("[WS] clear_cache received");
     if (isAndroid) {
       try {
@@ -460,7 +479,7 @@ function connectSocket() {
     }
   });
 
-  socket.on("bandwidth_config", (config) => {
+  socket.on("bandwidth_config", function(config) {
     devLog("[WS] bandwidth_config received: " + JSON.stringify(config));
     bandwidthConfig = config;
     if (isAndroid) {
@@ -468,7 +487,7 @@ function connectSocket() {
     }
   });
 
-  socket.on("cinema_alert_config", (config) => {
+  socket.on("cinema_alert_config", function(config) {
     devLog("[WS] cinema_alert_config: " + (config ? config.cinemaName : "silindi"));
     cinemaAlertConfig = config || null;
     scheduleCinemaAlerts();
@@ -481,9 +500,9 @@ function connectSocket() {
 async function fetchCinemaAlertConfig() {
   if (!monitorInfo) return;
   try {
-    const res = await fetch(`${API_BASE}/cinema-alerts/monitor/${monitorInfo.id}`);
+    var res = await fetch(API_BASE + "/cinema-alerts/monitor/" + monitorInfo.id);
     if (!res.ok) return;
-    const data = await res.json();
+    var data = await res.json();
     cinemaAlertConfig = data || null;
     scheduleCinemaAlerts();
     devLog("Cinema alert config: " + (data ? data.cinemaName : "yox"));
@@ -493,40 +512,40 @@ async function fetchCinemaAlertConfig() {
 }
 
 async function scheduleCinemaAlerts() {
-  cinemaAlertTimers.forEach(t => clearTimeout(t));
+  cinemaAlertTimers.forEach(function(t) { clearTimeout(t); });
   cinemaAlertTimers = [];
   hideCinemaAlertOverlay();
   if (!cinemaAlertConfig) return;
 
   try {
-    const res = await fetch(cinemaAlertConfig.apiUrl);
-    const text = await res.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, "text/xml");
-    const movies = xml.querySelectorAll("movie");
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const sessions = [];
+    var res = await fetch(cinemaAlertConfig.apiUrl);
+    var text = await res.text();
+    var parser = new DOMParser();
+    var xml = parser.parseFromString(text, "text/xml");
+    var movies = xml.querySelectorAll("movie");
+    var now = new Date();
+    var today = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,'0') + "-" + String(now.getDate()).padStart(2,'0');
+    var sessions = [];
 
-    movies.forEach(movie => {
-      const title = movie.querySelector("title")?.textContent?.trim() || "";
-      movie.querySelectorAll("hall").forEach(hall => {
-        const hallName = hall.getAttribute("name") || "";
-        hall.querySelectorAll("session").forEach(s => {
-          const timeRaw = s.textContent?.trim() || "";
-          const isDatetime = timeRaw.length >= 16;
-          const sessionDate = isDatetime ? timeRaw.substring(0, 10) : today;
+    movies.forEach(function(movie) {
+      var title = (movie.querySelector("title") ? movie.querySelector("title").textContent.trim() : "") || "";
+      movie.querySelectorAll("hall").forEach(function(hall) {
+        var hallName = hall.getAttribute("name") || "";
+        hall.querySelectorAll("session").forEach(function(s) {
+          var timeRaw = (s.textContent ? s.textContent.trim() : "") || "";
+          var isDatetime = timeRaw.length >= 16;
+          var sessionDate = isDatetime ? timeRaw.substring(0, 10) : today;
           if (sessionDate !== today) return;
-          const timeStr = isDatetime ? timeRaw.substring(11, 16) : timeRaw;
-          const parts = timeStr.split(":");
+          var timeStr = isDatetime ? timeRaw.substring(11, 16) : timeRaw;
+          var parts = timeStr.split(":");
           if (parts.length < 2) return;
-          const h = parseInt(parts[0], 10);
-          const m = parseInt(parts[1], 10);
+          var h = parseInt(parts[0], 10);
+          var m = parseInt(parts[1], 10);
           if (isNaN(h) || isNaN(m)) return;
-          const sessionTime = new Date(now);
+          var sessionTime = new Date(now);
           sessionTime.setHours(h, m, 0, 0);
-          const alertTime = new Date(sessionTime.getTime() - cinemaAlertConfig.minutesBefore * 60000);
-          const delay = alertTime.getTime() - Date.now();
+          var alertTime = new Date(sessionTime.getTime() - cinemaAlertConfig.minutesBefore * 60000);
+          var delay = alertTime.getTime() - Date.now();
           if (delay > -10000) {
             sessions.push({ time: timeStr, title, hall: hallName, type: s.getAttribute("type") || "2D", lang: s.getAttribute("language") || "", alertTime });
           }
@@ -535,9 +554,9 @@ async function scheduleCinemaAlerts() {
     });
 
     devLog("Cinema alert: " + sessions.length + " seans planlandı");
-    sessions.forEach(sess => {
-      const delay = Math.max(0, sess.alertTime.getTime() - Date.now());
-      const t = setTimeout(() => showCinemaAlertOverlay(sess), delay);
+    sessions.forEach(function(sess) {
+      var delay = Math.max(0, sess.alertTime.getTime() - Date.now());
+      var t = setTimeout(function() { showCinemaAlertOverlay(sess); }, delay);
       cinemaAlertTimers.push(t);
     });
   } catch (e) {
@@ -547,57 +566,65 @@ async function scheduleCinemaAlerts() {
 
 function showEmergencyAlert(data) {
   hideEmergencyAlert();
-  const overlay = document.createElement("div");
+  var overlay = document.createElement("div");
   overlay.id = "emergency-alert-overlay";
-  overlay.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;background:${data.color || '#dc2626'};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;`;
-  overlay.innerHTML = `
-    <div style="font-size:80px;margin-bottom:30px;">⚠️</div>
-    <div style="font-size:48px;font-weight:bold;line-height:1.3;max-width:80%;text-shadow:0 2px 10px rgba(0,0,0,0.3);">${data.message}</div>
-  `;
+  overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;background:" + data.color || '#dc2626' + ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;";
+  overlay.innerHTML = "\n    <div style=\"font-size:80px;margin-bottom:30px;\">⚠️</div>\n    <div style=\"font-size:48px;font-weight:bold;line-height:1.3;max-width:80%;text-shadow:0 2px 10px rgba(0,0,0,0.3);\">" + data.message + "</div>\n  ";
   document.body.appendChild(overlay);
   if (data.duration && data.duration > 0) {
-    setTimeout(() => hideEmergencyAlert(), data.duration * 1000);
+    setTimeout(function() { hideEmergencyAlert(); }, data.duration * 1000);
   }
 }
 
 function hideEmergencyAlert() {
-  const el = document.getElementById("emergency-alert-overlay");
+  var el = document.getElementById("emergency-alert-overlay");
   if (el) el.remove();
 }
 
 function showCinemaAlertOverlay(session) {
   hideCinemaAlertOverlay();
-  const cfg = cinemaAlertConfig;
+  var cfg = cinemaAlertConfig;
   if (!cfg) return;
 
-  const fields = cfg.showFields || {};
-  const color = cfg.color || "#e50914";
+  var fields = cfg.showFields || {};
+  var color = cfg.color || "#e50914";
+  var bg = cfg.bg || "#0a0a0a";
+  var accent = cfg.accent || color;
+  var lang = cfg.lang || "az";
+
+  // Lokalizasiya olunmuş mesaj
+  var mins = cfg.minutesBefore || 5;
+  var title = session.title || "";
+  var hall = session.hall || "";
+  var MESSAGES = {
+    az: mins + " dəqiqə sonra \"" + title + "\" filmi " + hall + " zalında başlayacaqdır",
+    ru: "Через " + mins + " минут в зале " + hall + " начнётся фильм «" + title + "»",
+    en: "\"" + title + "\" will start in " + hall + " in " + mins + " minutes",
+  };
+  var messageText = MESSAGES[lang] || MESSAGES.az;
 
   if (!document.getElementById("cinema-alert-styles")) {
-    const style = document.createElement("style");
+    var style = document.createElement("style");
     style.id = "cinema-alert-styles";
-    style.textContent = `
-      @keyframes caIn  { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
-      @keyframes caOut { from { opacity:1; transform:scale(1); }  to { opacity:0; transform:scale(1.04); } }
-    `;
+    style.textContent = "\n      @keyframes caIn  { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }\n      @keyframes caOut { from { opacity:1; transform:scale(1); }  to { opacity:0; transform:scale(1.04); } }\n    ";
     document.head.appendChild(style);
   }
 
-  const overlay = document.createElement("div");
+  var overlay = document.createElement("div");
   overlay.id = "cinema-alert-overlay";
   overlay.style.cssText =
     "position:fixed;top:0;left:0;width:100%;height:100%;z-index:199999;" +
-    "background:linear-gradient(160deg,#0d0d1a 0%,#1a0535 50%,#0d0d1a 100%);" +
+    "background:" + bg + ";" +
     "display:flex;flex-direction:column;align-items:center;justify-content:center;" +
     "color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;" +
     "animation:caIn 0.5s ease;";
 
-  const accentTop = document.createElement("div");
-  accentTop.style.cssText = `position:absolute;top:0;left:0;right:0;height:5px;background:${color};`;
+  var accentTop = document.createElement("div");
+  accentTop.style.cssText = "position:absolute;top:0;left:0;right:0;height:5px;background:" + accent + ";";
   overlay.appendChild(accentTop);
 
   if (cfg.cinemaName) {
-    const nameEl = document.createElement("div");
+    var nameEl = document.createElement("div");
     nameEl.style.cssText =
       "position:absolute;top:28px;left:0;right:0;text-align:center;" +
       "font-size:14px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,0.4);";
@@ -605,11 +632,19 @@ function showCinemaAlertOverlay(session) {
     overlay.appendChild(nameEl);
   }
 
-  const wrap = document.createElement("div");
-  wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;";
+  var wrap = document.createElement("div");
+  wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;max-width:90vw;";
+
+  // Lokalizasiya olunmuş mesaj (üstdə)
+  var msgEl = document.createElement("div");
+  msgEl.style.cssText =
+    "font-size:clamp(16px,2vw,28px);font-weight:500;color:rgba(255,255,255,0.85);" +
+    "margin-bottom:16px;line-height:1.4;max-width:85vw;text-shadow:0 2px 10px rgba(0,0,0,0.4);";
+  msgEl.textContent = messageText;
+  wrap.appendChild(msgEl);
 
   if (fields.movie && session.title) {
-    const t = document.createElement("div");
+    var t = document.createElement("div");
     t.style.cssText =
       "font-size:clamp(22px,3.5vw,52px);font-weight:900;letter-spacing:2px;" +
       "margin-bottom:4px;text-shadow:0 2px 20px rgba(0,0,0,0.5);max-width:90vw;";
@@ -618,30 +653,30 @@ function showCinemaAlertOverlay(session) {
   }
 
   if (fields.time && session.time) {
-    const t = document.createElement("div");
+    var t = document.createElement("div");
     t.style.cssText =
-      `font-size:clamp(48px,10vw,140px);font-weight:900;letter-spacing:8px;color:${color};` +
+      "font-size:clamp(48px,10vw,140px);font-weight:900;letter-spacing:8px;color:" + accent + ";" +
       "font-variant-numeric:tabular-nums;line-height:1;margin:8px 0;";
     t.textContent = session.time;
     wrap.appendChild(t);
   }
 
-  const badges = document.createElement("div");
+  var badges = document.createElement("div");
   badges.style.cssText = "display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:12px;";
 
   if (fields.format && session.type) {
-    const fmtColor = session.type.toUpperCase().includes("IMAX") ? "#ffb300"
+    var fmtColor = session.type.toUpperCase().includes("IMAX") ? "#ffb300"
       : session.type.toUpperCase().includes("3D") ? "#ff5c5c" : "#00d4ff";
-    const b = document.createElement("span");
+    var b = document.createElement("span");
     b.style.cssText =
-      `padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);` +
-      `border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:800;color:${fmtColor};`;
+      "padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);" +
+      "border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:800;color:" + fmtColor + ";";
     b.textContent = session.type;
     badges.appendChild(b);
   }
 
   if (fields.hall && session.hall) {
-    const b = document.createElement("span");
+    var b = document.createElement("span");
     b.style.cssText =
       "padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);" +
       "border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:700;";
@@ -650,7 +685,7 @@ function showCinemaAlertOverlay(session) {
   }
 
   if (fields.lang && session.lang) {
-    const b = document.createElement("span");
+    var b = document.createElement("span");
     b.style.cssText =
       "padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);" +
       "border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:700;color:rgba(255,255,255,0.75);";
@@ -661,23 +696,23 @@ function showCinemaAlertOverlay(session) {
   if (badges.children.length > 0) wrap.appendChild(badges);
   overlay.appendChild(wrap);
 
-  const barWrap = document.createElement("div");
+  var barWrap = document.createElement("div");
   barWrap.style.cssText = "position:absolute;bottom:0;left:0;right:0;height:4px;background:rgba(255,255,255,0.1);";
-  const bar = document.createElement("div");
-  bar.style.cssText = `height:100%;background:${color};width:100%;`;
+  var bar = document.createElement("div");
+  bar.style.cssText = "height:100%;background:" + accent + ";width:100%;";
   barWrap.appendChild(bar);
   overlay.appendChild(barWrap);
 
   document.body.appendChild(overlay);
 
-  requestAnimationFrame(() => {
-    bar.style.transition = `width ${cfg.displaySeconds}s linear`;
+  requestAnimationFrame(function() {
+    bar.style.transition = "width " + cfg.displaySeconds + "s linear";
     bar.style.width = "0%";
   });
 
-  const hideTimer = setTimeout(() => {
+  var hideTimer = setTimeout(function() {
     overlay.style.animation = "caOut 0.5s ease forwards";
-    setTimeout(() => hideCinemaAlertOverlay(), 500);
+    setTimeout(function() { hideCinemaAlertOverlay(); }, 500);
   }, cfg.displaySeconds * 1000);
   cinemaAlertTimers.push(hideTimer);
 
@@ -685,7 +720,7 @@ function showCinemaAlertOverlay(session) {
 }
 
 function hideCinemaAlertOverlay() {
-  const el = document.getElementById("cinema-alert-overlay");
+  var el = document.getElementById("cinema-alert-overlay");
   if (el) el.remove();
 }
 
@@ -696,14 +731,14 @@ async function loadPlaylist() {
   if (!token || !monitorInfo) return;
 
   try {
-    const res = await fetch(`${API_BASE}/device/${monitorInfo.id}/playlist`, {
-      headers: { Authorization: `Bearer ${token}` },
+    var res = await fetch(API_BASE + "/device/" + monitorInfo.id + "/playlist", {
+      headers: { Authorization: "Bearer " + token },
     });
 
     if (res.status === 401) { doLogout(); return; }
     if (!res.ok) return;
 
-    const data = await res.json();
+    var data = await res.json();
 
     // Audio
     if (data.audio) {
@@ -717,7 +752,7 @@ async function loadPlaylist() {
       screensaverUrl = data.screensaverUrl;
       // Cache screensaver
       if (isAndroid && screensaverUrl) {
-        cacheMediaFile(screensaverUrl).then(() => {});
+        cacheMediaFile(screensaverUrl).then(function() {});
       }
     }
 
@@ -730,20 +765,20 @@ async function loadPlaylist() {
     // Schedules (new format) or items (legacy)
     if (data.schedules && data.schedules.length > 0) {
       schedules = data.schedules;
-      devLog(`Loaded ${schedules.length} schedule(s): ${schedules.map(s => s.name || s.id).join(", ")}`);
-      schedules.forEach(s => {
-        devLog(`  Schedule "${s.name}": ${s.items?.length || 0} items, days=${JSON.stringify(s.daysOfWeek)}, time=${s.startTime}-${s.endTime}`);
+      devLog("Loaded " + schedules.length + " schedule(s): " + schedules.map(function(s) { return s.name || s.id; }).join(", "));
+      schedules.forEach(function(s) {
+        devLog("  Schedule \"" + s.name + "\": " + (s.items ? s.items.length : 0) || 0 + " items, days=" + JSON.stringify(s.daysOfWeek) + ", time=" + s.startTime + "-" + s.endTime);
       });
     } else if (data.items && data.items.length > 0) {
       schedules = [{ id: "legacy", name: "Default", items: data.items }];
-      devLog(`Loaded legacy playlist: ${data.items.length} items`);
+      devLog("Loaded legacy playlist: " + data.items.length + " items");
     } else {
       schedules = [];
       devLog("No schedules or items received");
     }
 
     // Apply shuffle to each schedule that has it enabled
-    schedules = schedules.map(sched => applyShuffleToSchedule(sched));
+    schedules = schedules.map(function(sched) { return applyShuffleToSchedule(sched); });
 
     saveState();
     checkScheduleAndPlay();   // dərhal oyna — download-u gözləmə
@@ -752,9 +787,9 @@ async function loadPlaylist() {
     // Cache media in background (no await) — abort flag stops old downloads
     if (isAndroid) {
       cacheAbortFlag = true; // köhnə cache-i dayandır
-      setTimeout(async () => {
+      setTimeout(async function() {
         cacheAbortFlag = false;
-        for (const sched of schedules) {
+        for (var sched of schedules) {
           if (sched.items && sched.items.length > 0) {
             await cachePlaylistMedia(sched.items);
           }
@@ -780,12 +815,12 @@ async function loadPlaylist() {
 // SCHEDULE LOGIC
 // ============================================================
 function getActiveSchedule() {
-  const now = new Date();
-  const currentDay = now.getDay() === 0 ? 7 : now.getDay(); // ISO: 1=Mon, 7=Sun
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const todayStr = now.toISOString().split("T")[0];
+  var now = new Date();
+  var currentDay = now.getDay() === 0 ? 7 : now.getDay(); // ISO: 1=Mon, 7=Sun
+  var currentMinutes = now.getHours() * 60 + now.getMinutes();
+  var todayStr = now.toISOString().split("T")[0];
 
-  for (const sched of schedules) {
+  for (var sched of schedules) {
     // Check date range
     if (sched.startDate && todayStr < sched.startDate.split("T")[0]) continue;
     if (sched.endDate && todayStr > sched.endDate.split("T")[0]) continue;
@@ -795,10 +830,10 @@ function getActiveSchedule() {
 
     // Check time range
     if (sched.startTime && sched.endTime) {
-      const [sh, sm] = sched.startTime.split(":").map(Number);
-      const [eh, em] = sched.endTime.split(":").map(Number);
-      const start = sh * 60 + sm;
-      const end = eh * 60 + em;
+      var [sh, sm] = sched.startTime.split(":").map(Number);
+      var [eh, em] = sched.endTime.split(":").map(Number);
+      var start = sh * 60 + sm;
+      var end = eh * 60 + em;
 
       if (start <= end) {
         if (currentMinutes < start || currentMinutes >= end) continue;
@@ -816,7 +851,7 @@ function getActiveSchedule() {
 }
 
 function checkScheduleAndPlay() {
-  const active = getActiveSchedule();
+  var active = getActiveSchedule();
 
   if (!active) {
     if (!isScreensaver) {
@@ -826,12 +861,12 @@ function checkScheduleAndPlay() {
     }
     return;
   }
-  devLog(`Active schedule: "${active.name}" with ${active.items.length} items`);
+  devLog("Active schedule: \"" + active.name + "\" with " + active.items.length + " items");
 
   // Active schedule found
-  const newItems = active.items;
-  const oldIds = playlist.map((i) => i.id).join(",");
-  const newIds = newItems.map((i) => i.id).join(",");
+  var newItems = active.items;
+  var oldIds = playlist.map(function(i) { return i.id; }).join(",");
+  var newIds = newItems.map(function(i) { return i.id; }).join(",");
 
   if (oldIds !== newIds) {
     // Playlist changed
@@ -854,9 +889,9 @@ function preloadAndPlay() {
   if (playlist.length === 0) { showScreensaver(); return; }
   if (isDisplayOff) return;
 
-  const item = playlist[currentIndex];
+  var item = playlist[currentIndex];
   trackPlayed(item);
-  devLog(`Playing: ${item.name || "?"} (${item.type})`);
+  devLog("Playing: " + item.name || "?" + " (" + item.type + ")");
 
   if (item.type === "VIDEO") {
     playVideo(item);
@@ -867,34 +902,46 @@ function preloadAndPlay() {
   }
 }
 
+function stopExoIfPlaying() {
+  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
+    try { AndroidBridge.stopNativeVideo(); } catch(e) {}
+  }
+}
+
+// Native video callbacks
+window.onNativeVideoEnded = function() {
+  clearTimeout(itemTimer);
+  advanceToNext();
+};
+window.onNativeVideoError = function() {
+  clearTimeout(itemTimer);
+  if (playlist.length > 1) { advanceToNext(); } else { showScreensaver(); }
+};
+
 function playVideo(item) {
-  // Use native ExoPlayer if available (Android)
+  // Use native ExoPlayer if available (Android) — faster, no play button flash
   if (window.AndroidBridge && typeof AndroidBridge.playNativeVideo === 'function') {
-    // ExoPlayer needs real file path (not airmyplay-cache.local which only WebView intercepts)
-    var url = item.url;
+    var nativeUrl = item.url;
     if (typeof AndroidBridge.getCachedFilePath === 'function') {
-      var filePath = AndroidBridge.getCachedFilePath(item.url);
-      if (filePath) url = filePath;
+      var cached = AndroidBridge.getCachedFilePath(item.url);
+      if (cached) nativeUrl = cached;
     }
-    AndroidBridge.playNativeVideo(url, audioVolume, audioMuted);
-
-    // Set timer for duration-based advancement
+    AndroidBridge.playNativeVideo(nativeUrl, audioVolume, audioMuted);
     clearTimeout(itemTimer);
-    var duration = (item.duration || 30) * 1000;
+    var dur = (item.duration || 30) * 1000;
     itemTimer = setTimeout(function() {
-      AndroidBridge.stopNativeVideo();
+      stopExoIfPlaying();
       advanceToNext();
-    }, duration + 2000);
-
-    return; // Don't use WebView video
+    }, dur + 2000);
+    return;
   }
 
-  // Fallback: WebView video
+  // WebView fallback
   // Clear any leftover oncanplay from previous video load
   activeVideo.oncanplay = null;
   nextVideo.oncanplay = null;
 
-  const url = getMediaUrl(item);
+  var url = getMediaUrl(item);
 
   // Setup active video — keep hidden until first frame ready (avoids play-button flash)
   activeVideo.src = url;
@@ -904,8 +951,8 @@ function playVideo(item) {
   activeVideo.classList.add("hidden");
   activeVideo.style.zIndex = 10;
 
-  let videoShown = false;
-  const showVideo = () => {
+  var videoShown = false;
+  var showVideo = function() {
     if (videoShown) return;
     videoShown = true;
     clearTimeout(skipTimer);
@@ -925,17 +972,17 @@ function playVideo(item) {
   // Preload next
   preloadNext();
 
-  const playPromise = activeVideo.play();
-  if (playPromise) playPromise.catch(() => {
+  var playPromise = activeVideo.play();
+  if (playPromise) playPromise.catch(function() {
     // Autoplay blocked — try muted
     activeVideo.muted = true;
-    activeVideo.play().catch(() => {});
+    activeVideo.play().catch(function() {});
   });
 
-  const duration = (item.duration || 30) * 1000;
+  var duration = (item.duration || 30) * 1000;
 
   // If video doesn't start in 5s (file missing / network issue) → skip
-  const skipTimer = setTimeout(() => {
+  var skipTimer = setTimeout(function() {
     if (!videoShown) {
       activeVideo.oncanplay = null;
       activeVideo.onplaying = null;
@@ -947,12 +994,12 @@ function playVideo(item) {
     }
   }, 5000);
 
-  activeVideo.onended = () => {
+  activeVideo.onended = function() {
     clearTimeout(skipTimer);
     clearTimeout(itemTimer);
     advanceToNext();
   };
-  activeVideo.onerror = () => {
+  activeVideo.onerror = function() {
     console.warn("[Video] Error playing:", item.name);
     clearTimeout(skipTimer);
     activeVideo.classList.add("hidden");
@@ -961,7 +1008,7 @@ function playVideo(item) {
   };
 
   clearTimeout(itemTimer);
-  itemTimer = setTimeout(() => {
+  itemTimer = setTimeout(function() {
     clearTimeout(skipTimer);
     activeVideo.pause();
     advanceToNext();
@@ -969,10 +1016,7 @@ function playVideo(item) {
 }
 
 function playImage(item) {
-  // Stop native video if it was playing
-  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
-    AndroidBridge.stopNativeVideo();
-  }
+  stopExoIfPlaying();
   // Clear any leftover oncanplay callbacks — prevent ghost video appearing over image
   activeVideo.oncanplay = null;
   nextVideo.oncanplay = null;
@@ -982,7 +1026,7 @@ function playImage(item) {
   activeVideo.pause();
   nextVideo.pause();
 
-  const url = getMediaUrl(item);
+  var url = getMediaUrl(item);
 
   imageLayer.src = url;
   imageLayer.classList.remove("hidden");
@@ -993,17 +1037,14 @@ function playImage(item) {
 
   clearTimeout(itemTimer);
   if (playlist.length > 1) {
-    const duration = (item.duration || 10) * 1000;
+    var duration = (item.duration || 10) * 1000;
     itemTimer = setTimeout(advanceToNext, duration);
   }
   // Single image: stay on screen indefinitely (no timer)
 }
 
 function playWebPage(item) {
-  // Stop native video if it was playing
-  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
-    AndroidBridge.stopNativeVideo();
-  }
+  stopExoIfPlaying();
   activeVideo.classList.add("hidden");
   nextVideo.classList.add("hidden");
   activeVideo.pause();
@@ -1015,14 +1056,19 @@ function playWebPage(item) {
   webLayer.style.zIndex = 10;
 
   clearTimeout(itemTimer);
-  const duration = (item.duration || 30) * 1000;
-  itemTimer = setTimeout(advanceToNext, duration);
+  // Tək template isə reload etmə, template öz daxili refresh-i işləsin
+  if (playlist.length > 1) {
+    var duration = (item.duration || 30) * 1000;
+    itemTimer = setTimeout(advanceToNext, duration);
+  } else {
+    devLog("Tək template — reload edilmir, daxili refresh işləyir");
+  }
 }
 
 function preloadNext() {
-  const nextIndex = (currentIndex + 1) % playlist.length;
-  const nextItem = playlist[nextIndex];
-  const url = getMediaUrl(nextItem);
+  var nextIndex = (currentIndex + 1) % playlist.length;
+  var nextItem = playlist[nextIndex];
+  var url = getMediaUrl(nextItem);
 
   if (nextItem.type === "VIDEO") {
     nextVideo.src = url;
@@ -1030,7 +1076,7 @@ function preloadNext() {
     nextVideo.load();
   } else {
     // Preload image
-    const img = new Image();
+    var img = new Image();
     img.src = url;
   }
 }
@@ -1039,11 +1085,11 @@ function advanceToNext() {
   clearTimeout(itemTimer);
 
   // Log play to analytics
-  const finishedItem = (currentIndex >= 0 && playlist.length > 0) ? playlist[currentIndex] : null;
+  var finishedItem = (currentIndex >= 0 && playlist.length > 0) ? playlist[currentIndex] : null;
   if (finishedItem && monitorInfo) {
     fetch(API_BASE + '/analytics/log', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': "Bearer " + token },
       body: JSON.stringify({
         monitorId: monitorInfo.id,
         mediaId: finishedItem.mediaId || finishedItem.id,
@@ -1051,26 +1097,26 @@ function advanceToNext() {
         mediaType: finishedItem.type || 'IMAGE',
         durationMs: finishedItem.duration ? finishedItem.duration * 1000 : 10000,
       }),
-    }).catch(() => {});
+    }).catch(function() {});
   }
 
   webLayer.classList.add("hidden");
   webLayer.src = "about:blank";
 
   // Swap video buffers
-  const tmp = activeVideo;
+  var tmp = activeVideo;
   activeVideo = nextVideo;
   nextVideo = tmp;
   nextVideo.classList.add("hidden");
   nextVideo.style.zIndex = 1;
   nextVideo.pause();
 
-  const next = (currentIndex + 1) % playlist.length;
+  var next = (currentIndex + 1) % playlist.length;
   if (next === 0) {
-    const active = getActiveSchedule();
+    var active = getActiveSchedule();
     if (active && active.shuffle) {
-      const reshuffled = applyShuffleToSchedule(active);
-      const idx = schedules.findIndex(s => s.id === active.id);
+      var reshuffled = applyShuffleToSchedule(active);
+      var idx = schedules.findIndex(function(s) { return s.id === active.id; });
       if (idx !== -1) schedules[idx] = reshuffled;
       playlist = reshuffled.items;
     }
@@ -1094,10 +1140,7 @@ function stopPlayback() {
 // SCREENSAVER
 // ============================================================
 function showScreensaver() {
-  // Stop native video if it was playing
-  if (window.AndroidBridge && typeof AndroidBridge.stopNativeVideo === 'function') {
-    AndroidBridge.stopNativeVideo();
-  }
+  stopExoIfPlaying();
   isScreensaver = true;
   stopPlayback();
   screensaverEl.classList.remove("hidden");
@@ -1108,12 +1151,12 @@ function showScreensaver() {
   ssDefault.classList.add("hidden");
 
   if (screensaverUrl) {
-    const ssUrl = isAndroid ? getCachedUrl(screensaverUrl) : screensaverUrl;
-    const isVideo = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(screensaverUrl);
+    var ssUrl = isAndroid ? getCachedUrl(screensaverUrl) : screensaverUrl;
+    var isVideo = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(screensaverUrl);
     if (isVideo) {
       ssVideo.src = ssUrl;
       ssVideo.classList.remove("hidden");
-      ssVideo.play().catch(() => { ssVideo.muted = true; ssVideo.play().catch(() => {}); });
+      ssVideo.play().catch(function() { ssVideo.muted = true; ssVideo.play().catch(function() {}); });
     } else {
       ssImage.src = ssUrl;
       ssImage.classList.remove("hidden");
@@ -1142,14 +1185,14 @@ function checkDisplaySchedule() {
     return;
   }
 
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const [oh, om] = displaySchedule.onTime.split(":").map(Number);
-  const [fh, fm] = displaySchedule.offTime.split(":").map(Number);
-  const onMins = oh * 60 + om;
-  const offMins = fh * 60 + fm;
+  var now = new Date();
+  var mins = now.getHours() * 60 + now.getMinutes();
+  var [oh, om] = displaySchedule.onTime.split(":").map(Number);
+  var [fh, fm] = displaySchedule.offTime.split(":").map(Number);
+  var onMins = oh * 60 + om;
+  var offMins = fh * 60 + fm;
 
-  let shouldBeOn;
+  var shouldBeOn;
   if (onMins <= offMins) {
     shouldBeOn = mins >= onMins && mins < offMins;
   } else {
@@ -1173,8 +1216,8 @@ function checkDisplaySchedule() {
 // ============================================================
 function applyDisplaySettings(settings) {
   displaySettings = settings;
-  const fit = settings.objectFit || "cover";
-  [videoA, videoB, imageLayer, ssImage, ssVideo].forEach((el) => {
+  var fit = settings.objectFit || "cover";
+  [videoA, videoB, imageLayer, ssImage, ssVideo].forEach(function(el) {
     if (el) el.style.objectFit = fit;
   });
   // Orientation — Android native rotation
@@ -1187,31 +1230,15 @@ function applyDisplaySettings(settings) {
 // AUDIO
 // ============================================================
 function applyAudio() {
-  [videoA, videoB, ssVideo].forEach((v) => {
+  [videoA, videoB, ssVideo].forEach(function(v) {
     v.volume = audioVolume / 100;
     v.muted = audioMuted;
   });
-  // Sync volume to native ExoPlayer if active
+  // Sync with ExoPlayer
   if (window.AndroidBridge && typeof AndroidBridge.setNativeVideoVolume === 'function') {
-    AndroidBridge.setNativeVideoVolume(audioVolume, audioMuted);
+    try { AndroidBridge.setNativeVideoVolume(audioVolume, audioMuted); } catch(e) {}
   }
 }
-
-// Native video ended callback (called from Kotlin ExoPlayer)
-window.onNativeVideoEnded = function() {
-  clearTimeout(itemTimer);
-  advanceToNext();
-};
-
-// Native video error callback (called from Kotlin ExoPlayer)
-window.onNativeVideoError = function() {
-  clearTimeout(itemTimer);
-  if (playlist.length > 1) {
-    advanceToNext();
-  } else {
-    showScreensaver();
-  }
-};
 
 // ============================================================
 // HEARTBEAT
@@ -1219,16 +1246,16 @@ window.onNativeVideoError = function() {
 async function sendHeartbeat() {
   if (!token || !monitorInfo) return;
   try {
-    const ver = isAndroid ? AndroidBridge.getAppVersion() : "1.0.0";
-    const platform = isAndroid ? "android" : "web";
-    const body = {
-      appVersion: `${platform}-${ver}`,
-      nowPlaying: playlist[currentIndex]?.name || null,
+    var ver = isAndroid ? AndroidBridge.getAppVersion() : "1.0.0";
+    var platform = isAndroid ? "android" : "web";
+    var body = {
+      appVersion: platform + "-" + ver,
+      nowPlaying: (playlist[currentIndex] ? playlist[currentIndex].name : null) || null,
     };
 
-    await fetch(`${API_BASE}/device/${monitorInfo.id}/heartbeat`, {
+    await fetch(API_BASE + "/device/" + monitorInfo.id + "/heartbeat", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify(body),
     });
   } catch {}
@@ -1238,13 +1265,13 @@ async function sendHeartbeat() {
 // DEV LOG
 // ============================================================
 function devLog(msg) {
-  const ts = new Date().toLocaleTimeString("az-AZ", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  const entry = `[${ts}] ${msg}`;
+  var ts = new Date().toLocaleTimeString("az-AZ", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  var entry = "[" + ts + "] " + msg;
   console.log(entry);
   devLogs.push(entry);
   if (devLogs.length > 200) devLogs.shift();
   // Update dev panel if open
-  const logEl = document.getElementById("dev-logs");
+  var logEl = document.getElementById("dev-logs");
   if (logEl) {
     logEl.textContent = devLogs.slice(-50).join("\n");
     logEl.scrollTop = logEl.scrollHeight;
@@ -1257,83 +1284,23 @@ function devLog(msg) {
 function createDevTools() {
   if (document.getElementById("dev-panel")) return;
 
-  const panel = document.createElement("div");
+  var panel = document.createElement("div");
   panel.id = "dev-panel";
-  panel.style.cssText = `
-    position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.95);
-    color:#fff;font-family:monospace;font-size:12px;overflow-y:auto;padding:16px;
-    display:flex;flex-direction:column;gap:12px;
-  `;
+  panel.style.cssText = "\n    position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.95);\n    color:#fff;font-family:monospace;font-size:12px;overflow-y:auto;padding:16px;\n    display:flex;flex-direction:column;gap:12px;\n  ";
 
-  panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <h2 style="margin:0;font-size:16px;color:#10b981">Dev Tools — Airmyplay Android</h2>
-      <button id="dev-close" style="background:#ef4444;border:none;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">Bağla</button>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
-        <div style="color:#6b7280;font-size:10px">Status</div>
-        <div id="dev-status" style="color:#10b981;font-size:14px">--</div>
-      </div>
-      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
-        <div style="color:#6b7280;font-size:10px">WebSocket</div>
-        <div id="dev-ws" style="font-size:14px">--</div>
-      </div>
-      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
-        <div style="color:#6b7280;font-size:10px">Monitor</div>
-        <div id="dev-monitor" style="font-size:14px">--</div>
-      </div>
-      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
-        <div style="color:#6b7280;font-size:10px">Version</div>
-        <div id="dev-version" style="font-size:14px">--</div>
-      </div>
-      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
-        <div style="color:#6b7280;font-size:10px">Schedules</div>
-        <div id="dev-schedules" style="font-size:14px">--</div>
-      </div>
-      <div style="background:#1a1a2e;padding:10px;border-radius:8px">
-        <div style="color:#6b7280;font-size:10px">Playlist</div>
-        <div id="dev-playlist" style="font-size:14px">--</div>
-      </div>
-      <div style="background:#1a1a2e;padding:10px;border-radius:8px;grid-column:span 2">
-        <div style="color:#6b7280;font-size:10px">Media Cache</div>
-        <div id="dev-cache" style="font-size:14px">--</div>
-      </div>
-    </div>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="dev-clear-cache" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Keşi Təmizlə</button>
-      <button id="dev-reload-playlist" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Playlist Yenilə</button>
-      <button id="dev-show-files" style="background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Keş Faylları</button>
-      <button id="dev-logout" style="background:#ef4444;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">Çıxış</button>
-    </div>
-
-    <div id="dev-files-section" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div style="color:#6b7280;font-size:10px">Keş Qovluğu</div>
-        <div id="dev-cache-path" style="color:#6b7280;font-size:9px;font-family:monospace"></div>
-      </div>
-      <div id="dev-file-list" style="background:#0a0a14;padding:10px;border-radius:8px;overflow-y:auto;max-height:200px;font-size:11px"></div>
-    </div>
-
-    <div style="flex:1;min-height:0">
-      <div style="color:#6b7280;font-size:10px;margin-bottom:4px">Loglar</div>
-      <pre id="dev-logs" style="background:#0a0a14;padding:10px;border-radius:8px;overflow-y:auto;max-height:300px;white-space:pre-wrap;word-break:break-all;font-size:11px;color:#d1d5db;margin:0"></pre>
-    </div>
-  `;
+  panel.innerHTML = "\n    <div style=\"display:flex;justify-content:space-between;align-items:center\">\n      <h2 style=\"margin:0;font-size:16px;color:#10b981\">Dev Tools — Airmyplay Android</h2>\n      <button id=\"dev-close\" style=\"background:#ef4444;border:none;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px\">Bağla</button>\n    </div>\n\n    <div style=\"display:grid;grid-template-columns:1fr 1fr;gap:8px\">\n      <div style=\"background:#1a1a2e;padding:10px;border-radius:8px\">\n        <div style=\"color:#6b7280;font-size:10px\">Status</div>\n        <div id=\"dev-status\" style=\"color:#10b981;font-size:14px\">--</div>\n      </div>\n      <div style=\"background:#1a1a2e;padding:10px;border-radius:8px\">\n        <div style=\"color:#6b7280;font-size:10px\">WebSocket</div>\n        <div id=\"dev-ws\" style=\"font-size:14px\">--</div>\n      </div>\n      <div style=\"background:#1a1a2e;padding:10px;border-radius:8px\">\n        <div style=\"color:#6b7280;font-size:10px\">Monitor</div>\n        <div id=\"dev-monitor\" style=\"font-size:14px\">--</div>\n      </div>\n      <div style=\"background:#1a1a2e;padding:10px;border-radius:8px\">\n        <div style=\"color:#6b7280;font-size:10px\">Version</div>\n        <div id=\"dev-version\" style=\"font-size:14px\">--</div>\n      </div>\n      <div style=\"background:#1a1a2e;padding:10px;border-radius:8px\">\n        <div style=\"color:#6b7280;font-size:10px\">Schedules</div>\n        <div id=\"dev-schedules\" style=\"font-size:14px\">--</div>\n      </div>\n      <div style=\"background:#1a1a2e;padding:10px;border-radius:8px\">\n        <div style=\"color:#6b7280;font-size:10px\">Playlist</div>\n        <div id=\"dev-playlist\" style=\"font-size:14px\">--</div>\n      </div>\n      <div style=\"background:#1a1a2e;padding:10px;border-radius:8px;grid-column:span 2\">\n        <div style=\"color:#6b7280;font-size:10px\">Media Cache</div>\n        <div id=\"dev-cache\" style=\"font-size:14px\">--</div>\n      </div>\n    </div>\n\n    <div style=\"display:flex;gap:8px;flex-wrap:wrap\">\n      <button id=\"dev-clear-cache\" style=\"background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px\">Keşi Təmizlə</button>\n      <button id=\"dev-reload-playlist\" style=\"background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px\">Playlist Yenilə</button>\n      <button id=\"dev-show-files\" style=\"background:#6E55FF;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px\">Keş Faylları</button>\n      <button id=\"dev-logout\" style=\"background:#ef4444;border:none;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px\">Çıxış</button>\n    </div>\n\n    <div id=\"dev-files-section\" style=\"display:none\">\n      <div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:4px\">\n        <div style=\"color:#6b7280;font-size:10px\">Keş Qovluğu</div>\n        <div id=\"dev-cache-path\" style=\"color:#6b7280;font-size:9px;font-family:monospace\"></div>\n      </div>\n      <div id=\"dev-file-list\" style=\"background:#0a0a14;padding:10px;border-radius:8px;overflow-y:auto;max-height:200px;font-size:11px\"></div>\n    </div>\n\n    <div style=\"flex:1;min-height:0\">\n      <div style=\"color:#6b7280;font-size:10px;margin-bottom:4px\">Loglar</div>\n      <pre id=\"dev-logs\" style=\"background:#0a0a14;padding:10px;border-radius:8px;overflow-y:auto;max-height:300px;white-space:pre-wrap;word-break:break-all;font-size:11px;color:#d1d5db;margin:0\"></pre>\n    </div>\n  ";
 
   document.body.appendChild(panel);
 
   // Buttons
-  document.getElementById("dev-close").onclick = () => { panel.remove(); devToolsOpen = false; };
-  document.getElementById("dev-clear-cache").onclick = () => {
+  document.getElementById("dev-close").onclick = function() { panel.remove(); devToolsOpen = false; };
+  document.getElementById("dev-clear-cache").onclick = function() {
     if (isAndroid) { AndroidBridge.clearCache(); devLog("Cache cleared"); }
     updateDevStats();
   };
-  document.getElementById("dev-reload-playlist").onclick = () => { loadPlaylist(); devLog("Playlist reload triggered"); };
-  document.getElementById("dev-show-files").onclick = () => {
-    const section = document.getElementById("dev-files-section");
+  document.getElementById("dev-reload-playlist").onclick = function() { loadPlaylist(); devLog("Playlist reload triggered"); };
+  document.getElementById("dev-show-files").onclick = function() {
+    var section = document.getElementById("dev-files-section");
     if (section.style.display === "none") {
       section.style.display = "block";
       showCacheFiles();
@@ -1341,7 +1308,7 @@ function createDevTools() {
       section.style.display = "none";
     }
   };
-  document.getElementById("dev-logout").onclick = () => { panel.remove(); devToolsOpen = false; doLogout(); };
+  document.getElementById("dev-logout").onclick = function() { panel.remove(); devToolsOpen = false; doLogout(); };
 
   devToolsOpen = true;
   updateDevStats();
@@ -1351,28 +1318,28 @@ function createDevTools() {
 }
 
 function updateDevStats() {
-  const el = (id) => document.getElementById(id);
+  var el = function(id) { return document.getElementById(id); };
   if (!el("dev-panel")) return;
 
   el("dev-status").textContent = token ? "Online" : "Offline";
   el("dev-status").style.color = token ? "#10b981" : "#ef4444";
 
-  const wsConnected = socket && socket.connected;
+  var wsConnected = socket && socket.connected;
   el("dev-ws").textContent = wsConnected ? "Bağlı" : "Kəsilib";
   el("dev-ws").style.color = wsConnected ? "#10b981" : "#ef4444";
 
-  el("dev-monitor").textContent = monitorInfo ? `${monitorInfo.name || ""} (${monitorInfo.deviceKey || ""})` : "N/A";
+  el("dev-monitor").textContent = monitorInfo ? monitorInfo.name || "" + " (" + monitorInfo.deviceKey || "" + ")" : "N/A";
 
-  const ver = isAndroid ? AndroidBridge.getAppVersion() : "web";
-  el("dev-version").textContent = `${isAndroid ? "Android" : "Web"} v${ver}`;
+  var ver = isAndroid ? AndroidBridge.getAppVersion() : "web";
+  el("dev-version").textContent = isAndroid ? "Android" : "Web" + " v" + ver;
 
-  el("dev-schedules").textContent = `${schedules.length} cədvəl`;
-  el("dev-playlist").textContent = `${playlist.length} media, index: ${currentIndex}`;
+  el("dev-schedules").textContent = schedules.length + " cədvəl";
+  el("dev-playlist").textContent = playlist.length + " media, index: " + currentIndex;
 
   if (isAndroid) {
     try {
-      const stats = JSON.parse(AndroidBridge.getCacheStats());
-      el("dev-cache").textContent = `${stats.files || 0} fayl, ${stats.totalSizeMB || 0} MB`;
+      var stats = JSON.parse(AndroidBridge.getCacheStats());
+      el("dev-cache").textContent = stats.files || 0 + " fayl, " + stats.totalSizeMB || 0 + " MB";
     } catch { el("dev-cache").textContent = "N/A"; }
   } else {
     el("dev-cache").textContent = "Yalnız Android";
@@ -1380,43 +1347,37 @@ function updateDevStats() {
 }
 
 function showCacheFiles() {
-  const listEl = document.getElementById("dev-file-list");
-  const pathEl = document.getElementById("dev-cache-path");
+  var listEl = document.getElementById("dev-file-list");
+  var pathEl = document.getElementById("dev-cache-path");
   if (!isAndroid) {
     listEl.innerHTML = '<div style="color:#6b7280">Yalnız Android-də mövcuddur</div>';
     return;
   }
   try {
     pathEl.textContent = AndroidBridge.getCachePath();
-    const files = JSON.parse(AndroidBridge.listCacheFiles());
+    var files = JSON.parse(AndroidBridge.listCacheFiles());
     if (files.length === 0) {
       listEl.innerHTML = '<div style="color:#6b7280">Keşdə fayl yoxdur</div>';
       return;
     }
-    listEl.innerHTML = files.map((f, i) => {
-      const extColor = f.ext.match(/mp4|webm|mov|ogg/) ? "#3b82f6" : "#10b981";
-      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1a2e">
-        <span style="color:#d1d5db;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${i+1}. ${f.name}</span>
-        <span style="display:flex;gap:8px;flex-shrink:0">
-          <span style="color:${extColor};text-transform:uppercase;font-size:10px">${f.ext}</span>
-          <span style="color:#6b7280">${f.size}</span>
-        </span>
-      </div>`;
+    listEl.innerHTML = files.map(function(f, i) {
+      var extColor = f.ext.match(/mp4|webm|mov|ogg/) ? "#3b82f6" : "#10b981";
+      return "<div style=\"display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1a2e\">\n        <span style=\"color:#d1d5db;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%\">" + i+1 + ". " + f.name + "</span>\n        <span style=\"display:flex;gap:8px;flex-shrink:0\">\n          <span style=\"color:" + extColor + ";text-transform:uppercase;font-size:10px\">" + f.ext + "</span>\n          <span style=\"color:#6b7280\">" + f.size + "</span>\n        </span>\n      </div>";
     }).join("");
   } catch (e) {
-    listEl.innerHTML = `<div style="color:#ef4444">Xəta: ${e.message}</div>`;
+    listEl.innerHTML = "<div style=\"color:#ef4444\">Xəta: " + e.message + "</div>";
   }
 }
 
 // 10-tap to open dev tools (10 taps within 3s)
-let tapCount = 0;
-let tapTimer = null;
+var tapCount = 0;
+var tapTimer = null;
 
 function handleDevTap() {
   if (devToolsOpen) return;
   tapCount++;
   if (tapCount === 1) {
-    tapTimer = setTimeout(() => { tapCount = 0; }, 3000);
+    tapTimer = setTimeout(function() { tapCount = 0; }, 3000);
   }
   if (tapCount >= 10) {
     clearTimeout(tapTimer);
@@ -1425,17 +1386,17 @@ function handleDevTap() {
   }
 }
 
-document.addEventListener("touchend", (e) => { handleDevTap(); }, { passive: true });
+document.addEventListener("touchend", function(e) { handleDevTap(); }, { passive: true });
 
 // Update dev stats every 5s if open
-setInterval(() => { if (devToolsOpen) updateDevStats(); }, 5000);
+setInterval(function() { if (devToolsOpen) updateDevStats(); }, 5000);
 
 // ============================================================
 // CLOCK (Screensaver)
 // ============================================================
 function startClockUpdate() {
   if (clockInterval) clearInterval(clockInterval);
-  const update = () => {
+  var update = function() {
     ssClock.textContent = new Date().toLocaleTimeString("az-AZ", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
   update();
@@ -1453,25 +1414,33 @@ function startPolling() {
   playlistPollInterval = setInterval(loadPlaylist, 30000);
 
   // Check schedule every 15s
-  schedulePollInterval = setInterval(() => {
+  schedulePollInterval = setInterval(function() {
     checkScheduleAndPlay();
     checkDisplaySchedule();
   }, 15000);
 
   // Heartbeat every 30s
   setInterval(sendHeartbeat, 30000);
+
+  // Re-fetch cinema alert config + re-schedule sessions every 10 minutes
+  // (long setTimeout-lar Android WebView-də throttle olunur, periodik refresh lazımdır)
+  setInterval(function() {
+    devLog("Cinema alert periodic refresh...");
+    fetchCinemaAlertConfig();
+  }, 10 * 60 * 1000);
 }
 
 // ============================================================
 // LOGOUT
 // ============================================================
 function doLogout() {
+  stopExoIfPlaying();
   // Notify server
   if (token && monitorInfo) {
-    fetch(`${API_BASE}/device/${monitorInfo.id}/logout`, {
+    fetch(API_BASE + "/device/" + monitorInfo.id + "/logout", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => {});
+      headers: { Authorization: "Bearer " + token },
+    }).catch(function() {});
   }
 
   // Cleanup
@@ -1501,8 +1470,8 @@ function doLogout() {
 // INIT — Auto-reconnect if deviceToken saved
 // ============================================================
 (async function init() {
-  const deviceToken = loadDeviceToken();
-  const state = loadState();
+  var deviceToken = loadDeviceToken();
+  var state = loadState();
 
   if (deviceToken) {
     // Restore cached state while reconnecting
