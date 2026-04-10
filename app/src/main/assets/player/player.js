@@ -616,7 +616,8 @@ function showCinemaAlertOverlay(session) {
     "position:fixed;top:0;left:0;width:100%;height:100%;z-index:199999;" +
     "background:" + bg + ";" +
     "display:flex;flex-direction:column;align-items:center;justify-content:center;" +
-    "color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;" +
+    'color:#fff;font-family:Verdana,"Segoe UI",Tahoma,Arial,sans-serif;' +
+    "text-align:center;padding:40px;-webkit-font-smoothing:antialiased;" +
     "animation:caIn 0.5s ease;";
 
   var accentTop = document.createElement("div");
@@ -639,7 +640,7 @@ function showCinemaAlertOverlay(session) {
   var msgEl = document.createElement("div");
   msgEl.style.cssText =
     "font-size:clamp(16px,2vw,28px);font-weight:500;color:rgba(255,255,255,0.85);" +
-    "margin-bottom:16px;line-height:1.4;max-width:85vw;text-shadow:0 2px 10px rgba(0,0,0,0.4);";
+    "margin-bottom:16px;line-height:1.5;max-width:85vw;padding:0 10px 4px;";
   msgEl.textContent = messageText;
   wrap.appendChild(msgEl);
 
@@ -647,7 +648,7 @@ function showCinemaAlertOverlay(session) {
     var t = document.createElement("div");
     t.style.cssText =
       "font-size:clamp(22px,3.5vw,52px);font-weight:900;letter-spacing:2px;" +
-      "margin-bottom:4px;text-shadow:0 2px 20px rgba(0,0,0,0.5);max-width:90vw;";
+      "line-height:1.3;padding-bottom:8px;margin-bottom:4px;max-width:90vw;";
     t.textContent = session.title;
     wrap.appendChild(t);
   }
@@ -656,7 +657,7 @@ function showCinemaAlertOverlay(session) {
     var t = document.createElement("div");
     t.style.cssText =
       "font-size:clamp(48px,10vw,140px);font-weight:900;letter-spacing:8px;color:" + accent + ";" +
-      "font-variant-numeric:tabular-nums;line-height:1;margin:8px 0;";
+      "font-variant-numeric:tabular-nums;line-height:1.1;padding-bottom:6px;margin:8px 0;";
     t.textContent = session.time;
     wrap.appendChild(t);
   }
