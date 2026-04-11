@@ -37,6 +37,11 @@ var cinemaAlertConfig = null;
 var cinemaAlertTimers = [];
 var cacheAbortFlag = false; // yeni playlist gələndə köhnə cache-i dayandır
 
+// Offline limit (3 days) — anti-fraud: customer can't disconnect to avoid subscription check
+var OFFLINE_LIMIT_MS = 72 * 60 * 60 * 1000; // 3 days
+var serverOnline = false;
+var offlineCheckInterval = null;
+
 // ---- DOM ----
 var $ = function(id) { return document.getElementById(id); };
 var loginScreen   = $("login-screen");
@@ -230,6 +235,61 @@ function saveState() {
 }
 function loadState() {
   try { return JSON.parse(localStorage.getItem("awp_state")); } catch { return null; }
+}
+
+// ============================================================
+// OFFLINE LIMIT (3 days) — anti-fraud
+// ============================================================
+function saveLastOnlineTime() {
+  localStorage.setItem("awp_last_online", Date.now().toString());
+}
+
+function getLastOnlineTime() {
+  var t = localStorage.getItem("awp_last_online");
+  return t ? parseInt(t) : Date.now();
+}
+
+function setServerOnline(online) {
+  serverOnline = online;
+  if (online) {
+    saveLastOnlineTime();
+    hideOfflineLimitOverlay();
+  }
+}
+
+function checkOfflineLimit() {
+  if (serverOnline) return;
+  var elapsed = Date.now() - getLastOnlineTime();
+  if (elapsed >= OFFLINE_LIMIT_MS) {
+    showOfflineLimitOverlay();
+    devLog("Offline limit keçildi (" + Math.round(elapsed / 3600000) + " saat)");
+  }
+}
+
+function showOfflineLimitOverlay() {
+  var overlay = document.getElementById("offline-limit-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "offline-limit-overlay";
+    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0f1a;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;font-family:Verdana,'Segoe UI',Tahoma,Arial,sans-serif;";
+    overlay.innerHTML =
+      '<div style="width:64px;height:64px;border-radius:16px;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round"><path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"/><path d="M5 12.55a10.94 10.94 0 015.17-2.39"/><path d="M10.71 5.05A16 16 0 0122.56 9"/><path d="M1.42 9a15.91 15.91 0 014.7-2.88"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>' +
+      '</div>' +
+      '<div style="color:#f1f5f9;font-size:20px;font-weight:700;">İnternetə qoşulun</div>' +
+      '<div style="color:#94a3b8;font-size:14px;text-align:center;max-width:400px;padding:0 20px;">Cihaz 3 gündən çoxdur oflayn rejimdədir. Davam etmək üçün internet bağlantısını yoxlayın.</div>' +
+      '<div style="margin-top:16px;padding:8px 20px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:10px;color:#10B981;font-size:13px;">İnternet bərpa olunduqda avtomatik açılacaq</div>';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = "flex";
+  // Stop playback
+  stopExoIfPlaying();
+  if (typeof itemTimer !== "undefined" && itemTimer) clearTimeout(itemTimer);
+}
+
+function hideOfflineLimitOverlay() {
+  var overlay = document.getElementById("offline-limit-overlay");
+  if (overlay) overlay.style.display = "none";
 }
 
 // ============================================================
@@ -739,6 +799,7 @@ async function loadPlaylist() {
     if (res.status === 401) { doLogout(); return; }
     if (!res.ok) return;
 
+    setServerOnline(true);
     var data = await res.json();
 
     // Audio
@@ -804,6 +865,7 @@ async function loadPlaylist() {
 
   } catch (err) {
     console.error("[Playlist] Error:", err);
+    setServerOnline(false);
     // On Android, try to play from cache if offline
     if (isAndroid && schedules.length > 0) {
       loadingOverlay.classList.add("hidden");
@@ -1254,12 +1316,15 @@ async function sendHeartbeat() {
       nowPlaying: (playlist[currentIndex] ? playlist[currentIndex].name : null) || null,
     };
 
-    await fetch(API_BASE + "/device/" + monitorInfo.id + "/heartbeat", {
+    var res = await fetch(API_BASE + "/device/" + monitorInfo.id + "/heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify(body),
     });
-  } catch {}
+    if (res.ok) setServerOnline(true);
+  } catch {
+    setServerOnline(false);
+  }
 }
 
 // ============================================================
@@ -1410,6 +1475,7 @@ function startClockUpdate() {
 function startPolling() {
   if (playlistPollInterval) clearInterval(playlistPollInterval);
   if (schedulePollInterval) clearInterval(schedulePollInterval);
+  if (offlineCheckInterval) clearInterval(offlineCheckInterval);
 
   // Reload playlist every 30s
   playlistPollInterval = setInterval(loadPlaylist, 30000);
@@ -1429,6 +1495,10 @@ function startPolling() {
     devLog("Cinema alert periodic refresh...");
     fetchCinemaAlertConfig();
   }, 10 * 60 * 1000);
+
+  // Offline limit check — every 5 minutes
+  offlineCheckInterval = setInterval(checkOfflineLimit, 5 * 60 * 1000);
+  setTimeout(checkOfflineLimit, 15000); // first check 15s after start
 }
 
 // ============================================================
