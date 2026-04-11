@@ -580,38 +580,82 @@ async function scheduleCinemaAlerts() {
   try {
     var res = await fetch(cinemaAlertConfig.apiUrl);
     var text = await res.text();
-    var parser = new DOMParser();
-    var xml = parser.parseFromString(text, "text/xml");
-    var movies = xml.querySelectorAll("movie");
     var now = new Date();
     var today = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,'0') + "-" + String(now.getDate()).padStart(2,'0');
     var sessions = [];
+    var apiFormat = (cinemaAlertConfig.apiFormat || "XML").toUpperCase();
+    var mapping = cinemaAlertConfig.fieldMapping || {};
 
-    movies.forEach(function(movie) {
-      var title = (movie.querySelector("title") ? movie.querySelector("title").textContent.trim() : "") || "";
-      movie.querySelectorAll("hall").forEach(function(hall) {
-        var hallName = hall.getAttribute("name") || "";
-        hall.querySelectorAll("session").forEach(function(s) {
-          var timeRaw = (s.textContent ? s.textContent.trim() : "") || "";
-          var isDatetime = timeRaw.length >= 16;
-          var sessionDate = isDatetime ? timeRaw.substring(0, 10) : today;
-          if (sessionDate !== today) return;
-          var timeStr = isDatetime ? timeRaw.substring(11, 16) : timeRaw;
-          var parts = timeStr.split(":");
-          if (parts.length < 2) return;
-          var h = parseInt(parts[0], 10);
-          var m = parseInt(parts[1], 10);
-          if (isNaN(h) || isNaN(m)) return;
-          var sessionTime = new Date(now);
-          sessionTime.setHours(h, m, 0, 0);
-          var alertTime = new Date(sessionTime.getTime() - cinemaAlertConfig.minutesBefore * 60000);
-          var delay = alertTime.getTime() - Date.now();
-          if (delay > -10000) {
-            sessions.push({ time: timeStr, title, hall: hallName, type: s.getAttribute("type") || "2D", lang: s.getAttribute("language") || "", alertTime });
-          }
+    var getByPath = function(obj, path) {
+      if (!path) return obj;
+      return path.split('.').reduce(function(acc, key) {
+        if (acc == null) return null;
+        var m = key.match(/^(.+?)\[(\d+)\]$/);
+        if (m) return acc[m[1]] ? acc[m[1]][parseInt(m[2])] : null;
+        return acc[key];
+      }, obj);
+    };
+
+    if (apiFormat === "JSON") {
+      var json = JSON.parse(text);
+      var items = cinemaAlertConfig.apiDataPath ? getByPath(json, cinemaAlertConfig.apiDataPath) : json;
+      var list = Array.isArray(items) ? items : [items];
+      devLog("JSON-da seans sayı: " + list.length);
+      list.forEach(function(item) {
+        if (!item) return;
+        var title = (mapping.title ? getByPath(item, mapping.title) : item.title) || "";
+        var timeRaw = String((mapping.time ? getByPath(item, mapping.time) : item.time) || "");
+        var hallName = String((mapping.hall ? getByPath(item, mapping.hall) : item.hall) || "");
+        var type = String((mapping.type ? getByPath(item, mapping.type) : item.type) || "2D");
+        var lang = String((mapping.lang ? getByPath(item, mapping.lang) : item.lang) || "");
+        var isDatetime = timeRaw.length >= 16;
+        var sessionDate = isDatetime ? timeRaw.substring(0, 10) : today;
+        if (sessionDate !== today) return;
+        var timeStr = isDatetime ? timeRaw.substring(11, 16) : timeRaw;
+        var parts = timeStr.split(":");
+        if (parts.length < 2) return;
+        var h = parseInt(parts[0], 10);
+        var m = parseInt(parts[1], 10);
+        if (isNaN(h) || isNaN(m)) return;
+        var sessionTime = new Date(now);
+        sessionTime.setHours(h, m, 0, 0);
+        var alertTime = new Date(sessionTime.getTime() - cinemaAlertConfig.minutesBefore * 60000);
+        var delay = alertTime.getTime() - Date.now();
+        if (delay > -10000) {
+          sessions.push({ time: timeStr, title: String(title), hall: hallName, type: type, lang: lang, alertTime: alertTime });
+        }
+      });
+    } else {
+      var parser = new DOMParser();
+      var xml = parser.parseFromString(text, "text/xml");
+      var movies = xml.querySelectorAll("movie");
+
+      movies.forEach(function(movie) {
+        var title = (movie.querySelector("title") ? movie.querySelector("title").textContent.trim() : "") || "";
+        movie.querySelectorAll("hall").forEach(function(hall) {
+          var hallName = hall.getAttribute("name") || "";
+          hall.querySelectorAll("session").forEach(function(s) {
+            var timeRaw = (s.textContent ? s.textContent.trim() : "") || "";
+            var isDatetime = timeRaw.length >= 16;
+            var sessionDate = isDatetime ? timeRaw.substring(0, 10) : today;
+            if (sessionDate !== today) return;
+            var timeStr = isDatetime ? timeRaw.substring(11, 16) : timeRaw;
+            var parts = timeStr.split(":");
+            if (parts.length < 2) return;
+            var h = parseInt(parts[0], 10);
+            var m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return;
+            var sessionTime = new Date(now);
+            sessionTime.setHours(h, m, 0, 0);
+            var alertTime = new Date(sessionTime.getTime() - cinemaAlertConfig.minutesBefore * 60000);
+            var delay = alertTime.getTime() - Date.now();
+            if (delay > -10000) {
+              sessions.push({ time: timeStr, title: title, hall: hallName, type: s.getAttribute("type") || "2D", lang: s.getAttribute("language") || "", alertTime: alertTime });
+            }
+          });
         });
       });
-    });
+    }
 
     devLog("Cinema alert: " + sessions.length + " seans planlandı");
     sessions.forEach(function(sess) {
