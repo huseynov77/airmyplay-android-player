@@ -35,6 +35,7 @@ var bandwidthConfig = null; // [{startTime, endTime, maxMBps}]
 var recentlyPlayedIds = []; // for shuffle no-repeat tracking
 var cinemaAlertConfig = null;
 var cinemaAlertTimers = [];
+var cinemaAlertActive = false;
 var cacheAbortFlag = false; // yeni playlist gələndə köhnə cache-i dayandır
 
 // Offline limit (3 days) — anti-fraud: customer can't disconnect to avoid subscription check
@@ -680,8 +681,9 @@ function showEmergencyAlert(data) {
   hideEmergencyAlert();
   var overlay = document.createElement("div");
   overlay.id = "emergency-alert-overlay";
-  overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;background:" + data.color || '#dc2626' + ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px;";
-  overlay.innerHTML = "\n    <div style=\"font-size:80px;margin-bottom:30px;\">⚠️</div>\n    <div style=\"font-size:48px;font-weight:bold;line-height:1.3;max-width:80%;text-shadow:0 2px 10px rgba(0,0,0,0.3);\">" + data.message + "</div>\n  ";
+  var bgColor = data.color || '#dc2626';
+  overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;background:" + bgColor + ";display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Verdana,'Segoe UI',Tahoma,Arial,sans-serif;text-align:center;padding:40px;";
+  overlay.innerHTML = '<div style="font-size:80px;margin-bottom:30px;">⚠️</div><div style="font-size:48px;font-weight:bold;line-height:1.3;max-width:80%;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,0.3);">' + (data.message || '') + '</div>';
   document.body.appendChild(overlay);
   if (data.duration && data.duration > 0) {
     setTimeout(function() { hideEmergencyAlert(); }, data.duration * 1000);
@@ -701,21 +703,51 @@ function showCinemaAlertCarousel(sessions) {
   var displaySeconds = cfg.displaySeconds || 20;
   var slideTime = Math.max(5, Math.floor(displaySeconds / sessions.length));
   var currentSlide = 0;
+  muteForAlert();
   showCinemaAlertOverlay(sessions[0], sessions.length, 0);
   var slideInterval = setInterval(function() {
     currentSlide++;
     if (currentSlide >= sessions.length) { clearInterval(slideInterval); return; }
-    showCinemaAlertOverlay(sessions[currentSlide], sessions.length, currentSlide);
+    updateCinemaAlertContent(sessions[currentSlide], sessions.length, currentSlide);
   }, slideTime * 1000);
   cinemaAlertTimers.push(slideInterval);
   var totalTime = slideTime * sessions.length;
   var hideTimer = setTimeout(function() {
     clearInterval(slideInterval);
     var overlay = document.getElementById("cinema-alert-overlay");
-    if (overlay) { overlay.style.animation = "caOut 0.5s ease forwards"; setTimeout(function() { hideCinemaAlertOverlay(); }, 500); }
+    if (overlay) { overlay.style.animation = "caOut 0.5s ease forwards"; setTimeout(function() { hideCinemaAlertOverlay(); unmuteAfterAlert(); }, 500); }
+    else { unmuteAfterAlert(); }
   }, totalTime * 1000);
   cinemaAlertTimers.push(hideTimer);
   devLog("Carousel: " + sessions.length + " seans, hər biri " + slideTime + "s");
+}
+
+function updateCinemaAlertContent(session, totalSlides, currentIndex) {
+  var overlay = document.getElementById("cinema-alert-overlay");
+  if (!overlay) return;
+  var wrap = document.getElementById("cinema-alert-wrap");
+  if (!wrap) return;
+  var cfg = cinemaAlertConfig;
+  if (!cfg) return;
+  var accent = cfg.accent || cfg.color || "#e50914";
+  var lang = cfg.lang || "az";
+  var mins = cfg.minutesBefore || 5;
+  var fields = cfg.showFields || {};
+  var title = session.title || "";
+  var hall = session.hall || "";
+  var MSGS = { az: mins + " dəqiqə sonra \"" + title + "\" filmi " + hall + " zalında başlayacaqdır", ru: "Через " + mins + " минут в зале " + hall + " начнётся фильм «" + title + "»", en: "\"" + title + "\" will start in " + hall + " in " + mins + " minutes" };
+  var h = '<div style="font-size:clamp(22px,3vw,38px);font-weight:500;color:rgba(255,255,255,0.9);margin-bottom:20px;line-height:1.4;max-width:85vw;">' + (MSGS[lang] || MSGS.az) + '</div>';
+  if (fields.movie && title) h += '<div style="font-size:clamp(22px,3.5vw,52px);font-weight:900;letter-spacing:2px;line-height:1.3;padding-bottom:8px;max-width:90vw;">' + title + '</div>';
+  if (fields.time && session.time) h += '<div style="font-size:clamp(48px,10vw,140px);font-weight:900;letter-spacing:8px;color:' + accent + ';font-variant-numeric:tabular-nums;line-height:1.1;padding-bottom:6px;margin:8px 0;">' + session.time + '</div>';
+  var bh = '';
+  if (fields.format && session.type) { var fc = session.type.toUpperCase().indexOf("IMAX") !== -1 ? "#ffb300" : session.type.toUpperCase().indexOf("3D") !== -1 ? "#ff5c5c" : "#00d4ff"; bh += '<span style="padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:800;color:' + fc + ';">' + session.type + '</span>'; }
+  if (fields.hall && hall) bh += '<span style="padding:8px 20px;border-radius:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);font-size:clamp(14px,1.8vw,22px);font-weight:700;">' + hall + '</span>';
+  if (bh) h += '<div style="display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px;">' + bh + '</div>';
+  if (totalSlides > 1) { var dh = ''; for (var i = 0; i < totalSlides; i++) { dh += '<div style="width:' + (i === currentIndex ? "24px" : "8px") + ';height:8px;border-radius:4px;background:' + (i === currentIndex ? accent : "rgba(255,255,255,0.3)") + ';transition:all 0.3s;"></div>'; } h += '<div style="display:flex;gap:8px;justify-content:center;margin-top:20px;">' + dh + '</div>'; }
+  wrap.innerHTML = h;
+  var bar = document.getElementById("cinema-alert-bar");
+  if (bar) { bar.style.transition = "none"; bar.style.width = "100%"; var st = Math.max(5, Math.floor((cfg.displaySeconds || 20) / totalSlides)); requestAnimationFrame(function() { bar.style.transition = "width " + st + "s linear"; bar.style.width = "0%"; }); }
+  devLog("Carousel slide " + (currentIndex + 1) + "/" + totalSlides + ": " + title);
 }
 
 function showCinemaAlertOverlay(session, totalSlides, currentIndex) {
@@ -770,7 +802,11 @@ function showCinemaAlertOverlay(session, totalSlides, currentIndex) {
     overlay.appendChild(nameEl);
   }
 
+  // Mute audio during alert
+  muteForAlert();
+
   var wrap = document.createElement("div");
+  wrap.id = "cinema-alert-wrap";
   wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;max-width:90vw;";
 
   // Lokalizasiya olunmuş mesaj (üstdə) — böyük font
@@ -851,6 +887,7 @@ function showCinemaAlertOverlay(session, totalSlides, currentIndex) {
   var barWrap = document.createElement("div");
   barWrap.style.cssText = "position:absolute;bottom:0;left:0;right:0;height:4px;background:rgba(255,255,255,0.1);";
   var bar = document.createElement("div");
+  bar.id = "cinema-alert-bar";
   bar.style.cssText = "height:100%;background:" + accent + ";width:100%;";
   barWrap.appendChild(bar);
   overlay.appendChild(barWrap);
@@ -867,7 +904,7 @@ function showCinemaAlertOverlay(session, totalSlides, currentIndex) {
   if (!isCarousel) {
     var hideTimer = setTimeout(function() {
       overlay.style.animation = "caOut 0.5s ease forwards";
-      setTimeout(function() { hideCinemaAlertOverlay(); }, 500);
+      setTimeout(function() { hideCinemaAlertOverlay(); unmuteAfterAlert(); }, 500);
     }, cfg.displaySeconds * 1000);
     cinemaAlertTimers.push(hideTimer);
   }
@@ -1388,14 +1425,22 @@ function applyDisplaySettings(settings) {
 // AUDIO
 // ============================================================
 function applyAudio() {
+  if (cinemaAlertActive) return;
   [videoA, videoB, ssVideo].forEach(function(v) {
     v.volume = audioVolume / 100;
     v.muted = audioMuted;
   });
-  // Sync with ExoPlayer
   if (window.AndroidBridge && typeof AndroidBridge.setNativeVideoVolume === 'function') {
     try { AndroidBridge.setNativeVideoVolume(audioVolume, audioMuted); } catch(e) {}
   }
+}
+function muteForAlert() {
+  cinemaAlertActive = true;
+  [videoA, videoB, ssVideo].forEach(function(v) { v.muted = true; });
+}
+function unmuteAfterAlert() {
+  cinemaAlertActive = false;
+  applyAudio();
 }
 
 // ============================================================
