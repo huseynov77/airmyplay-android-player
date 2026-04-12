@@ -657,10 +657,18 @@ async function scheduleCinemaAlerts() {
       });
     }
 
-    devLog("Cinema alert: " + sessions.length + " seans planlandı");
+    // Group sessions by alertTime (same time = carousel)
+    var grouped = {};
     sessions.forEach(function(sess) {
-      var delay = Math.max(0, sess.alertTime.getTime() - Date.now());
-      var t = setTimeout(function() { showCinemaAlertOverlay(sess); }, delay);
+      var key = sess.alertTime.getTime();
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(sess);
+    });
+    devLog("Cinema alert: " + sessions.length + " seans, " + Object.keys(grouped).length + " qrup planlandı");
+    Object.keys(grouped).forEach(function(timeKey) {
+      var group = grouped[timeKey];
+      var delay = Math.max(0, parseInt(timeKey) - Date.now());
+      var t = setTimeout(function() { showCinemaAlertCarousel(group); }, delay);
       cinemaAlertTimers.push(t);
     });
   } catch (e) {
@@ -685,7 +693,32 @@ function hideEmergencyAlert() {
   if (el) el.remove();
 }
 
-function showCinemaAlertOverlay(session) {
+function showCinemaAlertCarousel(sessions) {
+  if (!sessions || sessions.length === 0) return;
+  if (sessions.length === 1) { showCinemaAlertOverlay(sessions[0]); return; }
+  var cfg = cinemaAlertConfig;
+  if (!cfg) return;
+  var displaySeconds = cfg.displaySeconds || 20;
+  var slideTime = Math.max(5, Math.floor(displaySeconds / sessions.length));
+  var currentSlide = 0;
+  showCinemaAlertOverlay(sessions[0], sessions.length, 0);
+  var slideInterval = setInterval(function() {
+    currentSlide++;
+    if (currentSlide >= sessions.length) { clearInterval(slideInterval); return; }
+    showCinemaAlertOverlay(sessions[currentSlide], sessions.length, currentSlide);
+  }, slideTime * 1000);
+  cinemaAlertTimers.push(slideInterval);
+  var totalTime = slideTime * sessions.length;
+  var hideTimer = setTimeout(function() {
+    clearInterval(slideInterval);
+    var overlay = document.getElementById("cinema-alert-overlay");
+    if (overlay) { overlay.style.animation = "caOut 0.5s ease forwards"; setTimeout(function() { hideCinemaAlertOverlay(); }, 500); }
+  }, totalTime * 1000);
+  cinemaAlertTimers.push(hideTimer);
+  devLog("Carousel: " + sessions.length + " seans, hər biri " + slideTime + "s");
+}
+
+function showCinemaAlertOverlay(session, totalSlides, currentIndex) {
   hideCinemaAlertOverlay();
   var cfg = cinemaAlertConfig;
   if (!cfg) return;
@@ -740,11 +773,11 @@ function showCinemaAlertOverlay(session) {
   var wrap = document.createElement("div");
   wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;max-width:90vw;";
 
-  // Lokalizasiya olunmuş mesaj (üstdə)
+  // Lokalizasiya olunmuş mesaj (üstdə) — böyük font
   var msgEl = document.createElement("div");
   msgEl.style.cssText =
-    "font-size:clamp(16px,2vw,28px);font-weight:500;color:rgba(255,255,255,0.85);" +
-    "margin-bottom:16px;line-height:1.5;max-width:85vw;padding:0 10px 4px;";
+    "font-size:clamp(22px,3vw,38px);font-weight:500;color:rgba(255,255,255,0.9);" +
+    "margin-bottom:20px;line-height:1.4;max-width:85vw;padding:0 10px 4px;";
   msgEl.textContent = messageText;
   wrap.appendChild(msgEl);
 
@@ -799,6 +832,20 @@ function showCinemaAlertOverlay(session) {
   }
 
   if (badges.children.length > 0) wrap.appendChild(badges);
+
+  // Carousel dots
+  if (totalSlides && totalSlides > 1) {
+    var dotsWrap = document.createElement("div");
+    dotsWrap.style.cssText = "display:flex;gap:8px;justify-content:center;margin-top:20px;";
+    for (var di = 0; di < totalSlides; di++) {
+      var dot = document.createElement("div");
+      dot.style.cssText = "width:" + (di === currentIndex ? "24px" : "8px") + ";height:8px;border-radius:4px;transition:all 0.3s;" +
+        "background:" + (di === currentIndex ? accent : "rgba(255,255,255,0.3)") + ";";
+      dotsWrap.appendChild(dot);
+    }
+    wrap.appendChild(dotsWrap);
+  }
+
   overlay.appendChild(wrap);
 
   var barWrap = document.createElement("div");
@@ -810,16 +857,20 @@ function showCinemaAlertOverlay(session) {
 
   document.body.appendChild(overlay);
 
+  var isCarousel = totalSlides && totalSlides > 1;
+  var slideTime = isCarousel ? Math.max(5, Math.floor(cfg.displaySeconds / totalSlides)) : cfg.displaySeconds;
   requestAnimationFrame(function() {
-    bar.style.transition = "width " + cfg.displaySeconds + "s linear";
+    bar.style.transition = "width " + slideTime + "s linear";
     bar.style.width = "0%";
   });
 
-  var hideTimer = setTimeout(function() {
-    overlay.style.animation = "caOut 0.5s ease forwards";
-    setTimeout(function() { hideCinemaAlertOverlay(); }, 500);
-  }, cfg.displaySeconds * 1000);
-  cinemaAlertTimers.push(hideTimer);
+  if (!isCarousel) {
+    var hideTimer = setTimeout(function() {
+      overlay.style.animation = "caOut 0.5s ease forwards";
+      setTimeout(function() { hideCinemaAlertOverlay(); }, 500);
+    }, cfg.displaySeconds * 1000);
+    cinemaAlertTimers.push(hideTimer);
+  }
 
   devLog("Cinema alert göstərildi: " + session.title + " — " + session.time);
 }
