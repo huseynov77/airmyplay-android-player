@@ -1453,7 +1453,7 @@ async function sendHeartbeat() {
     var platform = isAndroid ? "android" : "web";
     var body = {
       appVersion: platform + "-" + ver,
-      nowPlaying: (playlist[currentIndex] ? playlist[currentIndex].name : null) || null,
+      nowPlaying: isScreensaver ? null : ((playlist[currentIndex] ? playlist[currentIndex].name : null) || null),
     };
 
     var res = await fetch(API_BASE + "/device/" + monitorInfo.id + "/heartbeat", {

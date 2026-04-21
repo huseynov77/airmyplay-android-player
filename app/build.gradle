@@ -11,8 +11,8 @@ android {
         applicationId "com.airmyplay.player"
         minSdk 21
         targetSdk 35
-        versionCode 33
-        versionName "1.9.13"
+        versionCode 34
+        versionName "1.9.14"
     }
 
     signingConfigs {
