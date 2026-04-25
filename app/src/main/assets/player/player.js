@@ -417,6 +417,7 @@ function connectSocket() {
 
   socket.on("disconnect", function(reason) {
     devLog("[WS] Disconnected: " + reason);
+    if (typeof sendDeviceEvent === "function") sendDeviceEvent("WS_DISCONNECT", "WebSocket ayrıldı", { reason: reason });
   });
 
   socket.on("connect_error", function(err) {
@@ -445,10 +446,14 @@ function connectSocket() {
 
   socket.on("audio_update", function(data) {
     console.log("[WS] audio_update", data);
+    var oldVol = audioVolume, oldMuted = audioMuted;
     if (data.volume !== undefined) audioVolume = data.volume;
     if (data.muted !== undefined) audioMuted = data.muted;
     applyAudio();
     saveState();
+    if ((data.volume !== undefined && data.volume !== oldVol) || (data.muted !== undefined && data.muted !== oldMuted)) {
+      if (typeof sendDeviceEvent === "function") sendDeviceEvent("AUDIO_CHANGE", "Audio dəyişdi", { from: { volume: oldVol, muted: oldMuted }, to: { volume: audioVolume, muted: audioMuted } });
+    }
   });
 
   socket.on("force_logout", function() {
@@ -1466,6 +1471,34 @@ async function sendHeartbeat() {
     setServerOnline(false);
   }
 }
+
+/** Backend-ə diaqnostik event göndər */
+async function sendDeviceEvent(type, message, metadata) {
+  if (!token || !monitorInfo) return;
+  try {
+    await fetch(API_BASE + "/device/" + monitorInfo.id + "/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ type: type, message: message, metadata: metadata }),
+    });
+  } catch {}
+}
+
+/** Sistem saatı dəyişikliyini izlə (60+ san sıçrayış) */
+var _clockMonotonic = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+var _clockWall = Date.now();
+setInterval(function() {
+  var monoNow = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+  var wallDelta = Date.now() - _clockWall;
+  var monotonicDelta = monoNow - _clockMonotonic;
+  var driftMs = wallDelta - monotonicDelta;
+  if (Math.abs(driftMs) > 60000) {
+    var driftMin = Math.round(driftMs / 60000);
+    sendDeviceEvent("CLOCK_CHANGE", "Saat " + (driftMin > 0 ? "+" : "") + driftMin + " dəq sıçradı", { driftMs: driftMs });
+  }
+  _clockMonotonic = monoNow;
+  _clockWall = Date.now();
+}, 30000);
 
 // ============================================================
 // DEV LOG
