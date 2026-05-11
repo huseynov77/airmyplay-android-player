@@ -18,9 +18,14 @@ android {
     signingConfigs {
         release {
             storeFile file("release.keystore")
-            storePassword "airmyplay2026"
-            keyAlias "airmyplay"
-            keyPassword "airmyplay2026"
+            // Keystore passwords from env vars (with fallback for backwards compat).
+            // Set ANDROID_KEYSTORE_PASSWORD + ANDROID_KEY_PASSWORD before running
+            // ./gradlew assembleRelease. Fallback retained so old build scripts
+            // and existing CI without env vars continue to work; remove once
+            // all build environments migrated.
+            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "airmyplay2026"
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "airmyplay"
+            keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: "airmyplay2026"
         }
     }
 
