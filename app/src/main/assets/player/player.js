@@ -1466,7 +1466,15 @@ async function sendHeartbeat() {
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify(body),
     });
-    if (res.ok) setServerOnline(true);
+    if (res.ok) {
+      setServerOnline(true);
+      // Backend may issue a refreshed JWT (when current token has < 30 days left).
+      // Save it so future requests use the fresh token — keeps player alive forever.
+      try {
+        var hbResp = await res.json();
+        if (hbResp && hbResp.accessToken) saveDeviceToken(hbResp.accessToken);
+      } catch (e) {}
+    }
   } catch {
     setServerOnline(false);
   }
